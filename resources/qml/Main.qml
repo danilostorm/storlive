@@ -36,6 +36,178 @@ ApplicationWindow {
     }
 
     Dialog {
+        id: sourceConfigDialog
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(680, root.width - 80)
+        height: Math.min(700, root.height - 80)
+        title: sourceName.length > 0 ? "Configurar " + sourceName : "Configurar fonte"
+        standardButtons: Dialog.Close
+        property string sourceName: ""
+        property var propertyModel: []
+
+        function refresh() {
+            propertyModel = controller.sourceProperties(sourceName)
+        }
+
+        function openFor(name) {
+            sourceName = name
+            refresh()
+            open()
+        }
+
+        function applyProperty(name, format, value) {
+            controller.setSourceProperty(sourceName, name, value, format)
+            refresh()
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 8
+            Label {
+                text: "Opções fornecidas pelo plugin OBS desta fonte"
+                color: root.textMuted
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+            Label {
+                visible: sourceConfigDialog.propertyModel.length === 0
+                text: "Esta fonte não expôs propriedades editáveis suportadas nesta versão."
+                color: root.textMuted
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+            }
+            ListView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                spacing: 6
+                model: sourceConfigDialog.propertyModel
+                delegate: Rectangle {
+                    width: ListView.view.width
+                    height: propertyColumn.implicitHeight + 16
+                    radius: 7
+                    color: modelData.type === "section" ? "#161920" : root.panel2
+                    opacity: modelData.enabled === false ? 0.55 : 1.0
+
+                    ColumnLayout {
+                        id: propertyColumn
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.margins: 8
+                        spacing: 5
+
+                        Label {
+                            text: modelData.label || modelData.name || "Opção"
+                            color: root.textPrimary
+                            font.bold: modelData.type === "section"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Loader {
+                            id: propertyLoader
+                            Layout.fillWidth: true
+                            active: modelData.type !== "section"
+                            sourceComponent: {
+                                if (modelData.type === "list") return listEditor
+                                if (modelData.type === "bool") return boolEditor
+                                if (modelData.type === "int") return intEditor
+                                if (modelData.type === "float") return floatEditor
+                                if (modelData.type === "text") return textEditor
+                                return infoEditor
+                            }
+                        }
+                    }
+
+                    Component {
+                        id: listEditor
+                        ComboBox {
+                            enabled: modelData.enabled !== false
+                            model: modelData.options || []
+                            textRole: "label"
+                            Layout.fillWidth: true
+
+                            function syncIndex() {
+                                var wanted = String(modelData.value)
+                                for (var i = 0; i < model.length; ++i) {
+                                    if (String(model[i].value) === wanted) {
+                                        currentIndex = i
+                                        return
+                                    }
+                                }
+                                currentIndex = -1
+                            }
+
+                            Component.onCompleted: syncIndex()
+                            onActivated: {
+                                if (currentIndex >= 0)
+                                    sourceConfigDialog.applyProperty(modelData.name, modelData.format, model[currentIndex].value)
+                            }
+                        }
+                    }
+
+                    Component {
+                        id: boolEditor
+                        Switch {
+                            enabled: modelData.enabled !== false
+                            checked: Boolean(modelData.value)
+                            text: checked ? "Ativado" : "Desativado"
+                            onToggled: sourceConfigDialog.applyProperty(modelData.name, "bool", checked)
+                        }
+                    }
+
+                    Component {
+                        id: intEditor
+                        SpinBox {
+                            enabled: modelData.enabled !== false
+                            from: modelData.min !== undefined ? modelData.min : -2147483647
+                            to: modelData.max !== undefined ? modelData.max : 2147483647
+                            stepSize: modelData.step !== undefined && modelData.step > 0 ? modelData.step : 1
+                            value: Number(modelData.value)
+                            editable: true
+                            onValueModified: sourceConfigDialog.applyProperty(modelData.name, "int", value)
+                        }
+                    }
+
+                    Component {
+                        id: floatEditor
+                        TextField {
+                            enabled: modelData.enabled !== false
+                            text: Number(modelData.value).toString()
+                            validator: DoubleValidator {
+                                bottom: modelData.min !== undefined ? modelData.min : -1000000000
+                                top: modelData.max !== undefined ? modelData.max : 1000000000
+                            }
+                            onEditingFinished: sourceConfigDialog.applyProperty(modelData.name, "float", Number(text))
+                        }
+                    }
+
+                    Component {
+                        id: textEditor
+                        TextField {
+                            enabled: modelData.enabled !== false
+                            text: modelData.value || ""
+                            echoMode: modelData.password ? TextInput.Password : TextInput.Normal
+                            onEditingFinished: sourceConfigDialog.applyProperty(modelData.name, "string", text)
+                        }
+                    }
+
+                    Component {
+                        id: infoEditor
+                        Label {
+                            text: modelData.value || ""
+                            color: root.textMuted
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Dialog {
         id: sourceDialog
         modal: true
         anchors.centerIn: parent
@@ -54,7 +226,12 @@ ApplicationWindow {
                 delegate: ItemDelegate {
                     width: ListView.view.width
                     enabled: modelData.available
-                    onClicked: { controller.addSource(modelData.kind); sourceDialog.close() }
+                    onClicked: {
+                        var result = controller.addSource(modelData.kind)
+                        sourceDialog.close()
+                        if (result.ok)
+                            sourceConfigDialog.openFor(result.name)
+                    }
                     contentItem: RowLayout {
                         Label { text: modelData.label; color: parent.parent.enabled ? root.textPrimary : "#676d79"; Layout.fillWidth: true }
                         Label { text: modelData.backend; color: root.textMuted; font.pixelSize: 11 }
@@ -110,12 +287,12 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         model: controller.sources
                         clip: true
-                        delegate: Rectangle {
+                        spacing: 4
+                        delegate: ItemDelegate {
                             width: ListView.view.width
                             height: 40
-                            radius: 6
-                            color: root.panel2
-                            Label { anchors.centerIn: parent; text: modelData; color: root.textPrimary }
+                            text: modelData
+                            onClicked: sourceConfigDialog.openFor(modelData)
                         }
                     }
                     Label { visible: controller.sources.length === 0; text: "Nenhuma fonte adicionada"; color: root.textMuted; font.pixelSize: 11 }

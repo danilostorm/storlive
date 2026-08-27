@@ -24,20 +24,21 @@ A base atual contém:
 - áudio 48 kHz e vídeo base 1080p60;
 - cena `Gameplay` real do libobs;
 - detecção/adicionamento das fontes de captura fornecidas pelos plugins instalados;
+- editor genérico das propriedades OBS da fonte (listas, bool, inteiro, decimal e texto), permitindo escolher janela/dispositivo quando o plugin expõe essa opção;
 - encoder H.264 automático/hardware/software + AAC;
 - multi-output RTMP real no backend libobs;
 - compartilhamento do mesmo par de encoders entre destinos com perfil idêntico;
 - reconexão e métricas por destino;
 - configuração de servidor/stream key pela interface sem exibir a chave de volta;
 - empacotamento CPack `.deb`;
-- script para Windows portable;
+- Windows portable ZIP;
 - GitHub Actions para Windows e Linux;
 - auditoria da aplicação legada em `docs/LEGACY_AUDIT.md`.
 
 ### Limites atuais
 
 - O preview ainda é um placeholder no Qt Quick; a cena já alimenta a saída do libobs, mas falta renderizá-la dentro da janela.
-- Fontes que exigem escolher uma janela/dispositivo específico ainda precisam da camada de propriedades/configuração.
+- Propriedades OBS especiais como botões, seletor de arquivos avançado, fontes e frame-rate ainda não possuem controles próprios; as propriedades comuns de seleção/configuração já são tratadas.
 - O CI Linux compila com libobs. O Windows portable ainda compila a UI/core sem libobs enquanto o SDK/runtime do OBS é integrado ao pacote MSVC.
 - Stream keys ficam somente em memória nesta fase; nenhuma chave do sistema legado foi importada.
 

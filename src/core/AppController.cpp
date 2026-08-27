@@ -113,16 +113,48 @@ void AppController::addCustomDestination(const QString &name, const QString &ser
     emit destinationsChanged();
 }
 
-void AppController::addSource(const QString &kind)
+QVariantMap AppController::addSource(const QString &kind)
 {
     QString error;
-    if (m_scenes.addSource(kind, &error)) {
-        m_activityStatus = QStringLiteral("Fonte adicionada à cena Gameplay");
+    QString createdName;
+    const bool ok = m_scenes.addSource(kind, &createdName, &error);
+    if (ok) {
+        m_activityStatus = QStringLiteral("%1 adicionada • escolha a janela/dispositivo nas propriedades").arg(createdName);
         emit sourcesChanged();
     } else {
         m_activityStatus = error;
     }
     emit statusChanged();
+
+    return {
+        {QStringLiteral("ok"), ok},
+        {QStringLiteral("name"), createdName},
+        {QStringLiteral("error"), error}
+    };
+}
+
+QVariantList AppController::sourceProperties(const QString &sourceName) const
+{
+    return m_scenes.sourceProperties(sourceName);
+}
+
+QVariantMap AppController::setSourceProperty(const QString &sourceName,
+                                              const QString &propertyName,
+                                              const QVariant &value,
+                                              const QString &format)
+{
+    QString error;
+    const bool ok = m_scenes.setSourceProperty(sourceName, propertyName, value, format, &error);
+    if (ok)
+        m_activityStatus = QStringLiteral("Configuração de %1 atualizada").arg(sourceName);
+    else
+        m_activityStatus = error;
+    emit statusChanged();
+
+    return {
+        {QStringLiteral("ok"), ok},
+        {QStringLiteral("error"), error}
+    };
 }
 
 void AppController::startAll()

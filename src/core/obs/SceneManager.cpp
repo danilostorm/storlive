@@ -3,6 +3,32 @@
 #include <QByteArray>
 #include <QVariantMap>
 
+namespace {
+#ifdef STORLIVE_HAS_LIBOBS
+QString comboFormatName(obs_combo_format format)
+{
+    switch (format) {
+    case OBS_COMBO_FORMAT_INT: return QStringLiteral("int");
+    case OBS_COMBO_FORMAT_FLOAT: return QStringLiteral("float");
+    case OBS_COMBO_FORMAT_BOOL: return QStringLiteral("bool");
+    case OBS_COMBO_FORMAT_STRING: return QStringLiteral("string");
+    default: return QStringLiteral("string");
+    }
+}
+
+QVariant valueForFormat(obs_data_t *settings, const char *name, const QString &format)
+{
+    if (format == QStringLiteral("int"))
+        return QVariant::fromValue<qlonglong>(obs_data_get_int(settings, name));
+    if (format == QStringLiteral("float"))
+        return obs_data_get_double(settings, name);
+    if (format == QStringLiteral("bool"))
+        return obs_data_get_bool(settings, name);
+    return QString::fromUtf8(obs_data_get_string(settings, name));
+}
+#endif
+}
+
 SceneManager::~SceneManager()
 {
     shutdown();
@@ -140,7 +166,7 @@ QVariantList SceneManager::sourceOptions() const
     return result;
 }
 
-bool SceneManager::addSource(const QString &kind, QString *error)
+bool SceneManager::addSource(const QString &kind, QString *createdName, QString *error)
 {
 #ifdef STORLIVE_HAS_LIBOBS
     if (!m_scene && !initialize(error))
@@ -176,9 +202,219 @@ bool SceneManager::addSource(const QString &kind, QString *error)
     }
 
     m_sourceNames.append(name);
+    if (createdName)
+        *createdName = name;
     return true;
 #else
     Q_UNUSED(kind)
+    Q_UNUSED(createdName)
+    if (error)
+        *error = QStringLiteral("Build sem libobs");
+    return false;
+#endif
+}
+
+#ifdef STORLIVE_HAS_LIBOBS
+void SceneManager::appendProperties(obs_properties_t *properties,
+                                    obs_data_t *settings,
+                                    QVariantList &result)
+{
+    obs_property_t *property = obs_properties_first(properties);
+    while (property) {
+        if (obs_property_visible(property)) {
+            const char *rawName = obs_property_name(property);
+            const char *rawDescription = obs_property_description(property);
+            const QString name = rawName ? QString::fromUtf8(rawName) : QString();
+            const QString label = rawDescription && *rawDescription
+                ? QString::fromUtf8(rawDescription)
+                : name;
+            const auto type = obs_property_get_type(property);
+
+            if (type == OBS_PROPERTY_GROUP) {
+                result.append(QVariantMap {
+                    {QStringLiteral("type"), QStringLiteral("section")},
+                    {QStringLiteral("label"), label},
+                    {QStringLiteral("enabled"), obs_property_enabled(property)}
+                });
+                obs_properties_t *group = obs_property_group_content(property);
+                if (group)
+                    appendProperties(group, settings, result);
+            } else if (!name.isEmpty()) {
+                QVariantMap item {
+                    {QStringLiteral("name"), name},
+                    {QStringLiteral("label"), label},
+                    {QStringLiteral("enabled"), obs_property_enabled(property)}
+                };
+
+                switch (type) {
+                case OBS_PROPERTY_LIST: {
+                    const QString format = comboFormatName(obs_property_list_format(property));
+                    QVariantList options;
+                    const size_t count = obs_property_list_item_count(property);
+                    for (size_t i = 0; i < count; ++i) {
+                        QVariant optionValue;
+                        switch (obs_property_list_format(property)) {
+                        case OBS_COMBO_FORMAT_INT:
+                            optionValue = QVariant::fromValue<qlonglong>(obs_property_list_item_int(property, i));
+                            break;
+                        case OBS_COMBO_FORMAT_FLOAT:
+                            optionValue = obs_property_list_item_float(property, i);
+                            break;
+                        case OBS_COMBO_FORMAT_BOOL:
+                            optionValue = obs_property_list_item_bool(property, i);
+                            break;
+                        case OBS_COMBO_FORMAT_STRING:
+                        default:
+                            optionValue = QString::fromUtf8(obs_property_list_item_string(property, i));
+                            break;
+                        }
+                        const char *optionName = obs_property_list_item_name(property, i);
+                        options.append(QVariantMap {
+                            {QStringLiteral("label"), optionName ? QString::fromUtf8(optionName) : QString()},
+                            {QStringLiteral("value"), optionValue},
+                            {QStringLiteral("disabled"), obs_property_list_item_disabled(property, i)}
+                        });
+                    }
+                    item.insert(QStringLiteral("type"), QStringLiteral("list"));
+                    item.insert(QStringLiteral("format"), format);
+                    item.insert(QStringLiteral("value"), valueForFormat(settings, rawName, format));
+                    item.insert(QStringLiteral("options"), options);
+                    break;
+                }
+                case OBS_PROPERTY_BOOL:
+                    item.insert(QStringLiteral("type"), QStringLiteral("bool"));
+                    item.insert(QStringLiteral("format"), QStringLiteral("bool"));
+                    item.insert(QStringLiteral("value"), obs_data_get_bool(settings, rawName));
+                    break;
+                case OBS_PROPERTY_INT:
+                    item.insert(QStringLiteral("type"), QStringLiteral("int"));
+                    item.insert(QStringLiteral("format"), QStringLiteral("int"));
+                    item.insert(QStringLiteral("value"), QVariant::fromValue<qlonglong>(obs_data_get_int(settings, rawName)));
+                    item.insert(QStringLiteral("min"), obs_property_int_min(property));
+                    item.insert(QStringLiteral("max"), obs_property_int_max(property));
+                    item.insert(QStringLiteral("step"), obs_property_int_step(property));
+                    break;
+                case OBS_PROPERTY_FLOAT:
+                    item.insert(QStringLiteral("type"), QStringLiteral("float"));
+                    item.insert(QStringLiteral("format"), QStringLiteral("float"));
+                    item.insert(QStringLiteral("value"), obs_data_get_double(settings, rawName));
+                    item.insert(QStringLiteral("min"), obs_property_float_min(property));
+                    item.insert(QStringLiteral("max"), obs_property_float_max(property));
+                    item.insert(QStringLiteral("step"), obs_property_float_step(property));
+                    break;
+                case OBS_PROPERTY_TEXT:
+                    if (obs_property_text_type(property) == OBS_TEXT_INFO) {
+                        item.insert(QStringLiteral("type"), QStringLiteral("info"));
+                        item.insert(QStringLiteral("value"), QString::fromUtf8(obs_data_get_string(settings, rawName)));
+                    } else {
+                        item.insert(QStringLiteral("type"), QStringLiteral("text"));
+                        item.insert(QStringLiteral("format"), QStringLiteral("string"));
+                        item.insert(QStringLiteral("value"), QString::fromUtf8(obs_data_get_string(settings, rawName)));
+                        item.insert(QStringLiteral("password"), obs_property_text_type(property) == OBS_TEXT_PASSWORD);
+                    }
+                    break;
+                case OBS_PROPERTY_PATH:
+                    item.insert(QStringLiteral("type"), QStringLiteral("text"));
+                    item.insert(QStringLiteral("format"), QStringLiteral("string"));
+                    item.insert(QStringLiteral("value"), QString::fromUtf8(obs_data_get_string(settings, rawName)));
+                    break;
+                default:
+                    item.clear();
+                    break;
+                }
+
+                if (!item.isEmpty())
+                    result.append(item);
+            }
+        }
+        obs_property_next(&property);
+    }
+}
+#endif
+
+QVariantList SceneManager::sourceProperties(const QString &sourceName, QString *error) const
+{
+#ifdef STORLIVE_HAS_LIBOBS
+    const QByteArray sourceNameUtf8 = sourceName.toUtf8();
+    obs_source_t *source = obs_get_source_by_name(sourceNameUtf8.constData());
+    if (!source) {
+        if (error)
+            *error = QStringLiteral("Fonte não encontrada: %1").arg(sourceName);
+        return {};
+    }
+
+    obs_data_t *settings = obs_source_get_settings(source);
+    obs_properties_t *properties = obs_source_properties(source);
+    QVariantList result;
+
+    if (settings && properties) {
+        obs_properties_apply_settings(properties, settings);
+        appendProperties(properties, settings, result);
+    }
+
+    if (properties)
+        obs_properties_destroy(properties);
+    if (settings)
+        obs_data_release(settings);
+    obs_source_release(source);
+
+    return result;
+#else
+    Q_UNUSED(sourceName)
+    if (error)
+        *error = QStringLiteral("Build sem libobs");
+    return {};
+#endif
+}
+
+bool SceneManager::setSourceProperty(const QString &sourceName,
+                                     const QString &propertyName,
+                                     const QVariant &value,
+                                     const QString &format,
+                                     QString *error)
+{
+#ifdef STORLIVE_HAS_LIBOBS
+    const QByteArray sourceNameUtf8 = sourceName.toUtf8();
+    obs_source_t *source = obs_get_source_by_name(sourceNameUtf8.constData());
+    if (!source) {
+        if (error)
+            *error = QStringLiteral("Fonte não encontrada: %1").arg(sourceName);
+        return false;
+    }
+
+    obs_data_t *settings = obs_source_get_settings(source);
+    if (!settings) {
+        obs_source_release(source);
+        if (error)
+            *error = QStringLiteral("Não foi possível ler as configurações da fonte");
+        return false;
+    }
+
+    const QByteArray propertyUtf8 = propertyName.toUtf8();
+    if (format == QStringLiteral("bool"))
+        obs_data_set_bool(settings, propertyUtf8.constData(), value.toBool());
+    else if (format == QStringLiteral("int"))
+        obs_data_set_int(settings, propertyUtf8.constData(), value.toLongLong());
+    else if (format == QStringLiteral("float"))
+        obs_data_set_double(settings, propertyUtf8.constData(), value.toDouble());
+    else
+        obs_data_set_string(settings, propertyUtf8.constData(), value.toString().toUtf8().constData());
+
+    obs_properties_t *properties = obs_source_properties(source);
+    if (properties) {
+        obs_properties_apply_settings(properties, settings);
+        obs_properties_destroy(properties);
+    }
+
+    obs_source_update(source, settings);
+    obs_data_release(settings);
+    obs_source_release(source);
+    return true;
+#else
+    Q_UNUSED(sourceName)
+    Q_UNUSED(propertyName)
+    Q_UNUSED(value)
+    Q_UNUSED(format)
     if (error)
         *error = QStringLiteral("Build sem libobs");
     return false;

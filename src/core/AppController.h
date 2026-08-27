@@ -2,7 +2,9 @@
 
 #include <QObject>
 #include <QTimer>
+#include <QVariant>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QVector>
 
 #include "obs/ObsEngine.h"
@@ -44,7 +46,12 @@ public:
     Q_INVOKABLE void setDestinationEnabled(int index, bool enabled);
     Q_INVOKABLE void setDestinationCredentials(int index, const QString &server, const QString &streamKey);
     Q_INVOKABLE void addCustomDestination(const QString &name, const QString &server, const QString &streamKey);
-    Q_INVOKABLE void addSource(const QString &kind);
+    Q_INVOKABLE QVariantMap addSource(const QString &kind);
+    Q_INVOKABLE QVariantList sourceProperties(const QString &sourceName) const;
+    Q_INVOKABLE QVariantMap setSourceProperty(const QString &sourceName,
+                                               const QString &propertyName,
+                                               const QVariant &value,
+                                               const QString &format);
     Q_INVOKABLE void startAll();
     Q_INVOKABLE void stopAll();
 
