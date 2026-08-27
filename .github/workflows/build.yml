@@ -22,7 +22,8 @@ jobs:
           sudo apt-get install -y \
             build-essential cmake ninja-build pkg-config \
             qt6-base-dev qt6-declarative-dev \
-            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtqml-workerscript \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+            qml6-module-qtquick-templates qml6-module-qtquick-window qml6-module-qtqml-workerscript \
             libobs-dev obs-plugins xvfb xauth
       - name: Configure with libobs
         run: cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=ON -DCMAKE_BUILD_TYPE=Release
@@ -39,6 +40,7 @@ jobs:
           code=$?
           set -e
           cat storlive-smoke.log || true
+          find "$HOME/.local/share" -name storlive-startup.log -print -exec cat {} \; 2>/dev/null || true
           if [ "$code" -ne 124 ]; then
             echo "StorLive exited during startup smoke test (exit=$code)" >&2
             exit 1
@@ -52,7 +54,7 @@ jobs:
           test -n "$pkg"
           deps="$(dpkg-deb -f "$pkg" Depends)"
           echo "$deps"
-          for dep in qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtqml-workerscript obs-plugins; do
+          for dep in qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-templates qml6-module-qtquick-window qml6-module-qtqml-workerscript obs-plugins; do
             printf '%s' "$deps" | grep -F "$dep" >/dev/null || { echo "Missing package dependency: $dep" >&2; exit 1; }
           done
       - uses: actions/upload-artifact@v4
@@ -110,6 +112,8 @@ jobs:
             'dist/obs-plugins/64bit/win-wasapi.dll',
             'dist/data/libobs',
             'dist/qml/QtQuick/Controls/qtquickcontrols2plugin.dll',
+            'dist/qml/QtQuick/Templates/qtquicktemplates2plugin.dll',
+            'dist/qml/QtQuick/Window/quickwindowplugin.dll',
             'dist/qml/QtQuick/Layouts/qquicklayoutsplugin.dll',
             'dist/platforms/qwindows.dll'
           )
@@ -122,10 +126,19 @@ jobs:
         shell: pwsh
         run: |
           $exe = (Resolve-Path 'dist/storlive.exe').Path
-          $process = Start-Process -FilePath $exe -WorkingDirectory (Resolve-Path 'dist').Path -PassThru
+          $work = (Resolve-Path 'dist').Path
+          $process = Start-Process -FilePath $exe -WorkingDirectory $work -PassThru
           Start-Sleep -Seconds 5
           $process.Refresh()
           if ($process.HasExited) {
+            Write-Host "StorLive exited with code $($process.ExitCode)"
+            Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter storlive-startup.log -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "--- $($_.FullName) ---"
+              Get-Content $_.FullName
+            }
+            Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue |
+              Where-Object { $_.Message -match 'storlive\.exe' } |
+              Select-Object -First 5 -ExpandProperty Message | Write-Host
             throw "StorLive exited during Windows startup smoke test (exit=$($process.ExitCode))"
           }
           Stop-Process -Id $process.Id -Force
