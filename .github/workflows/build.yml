@@ -60,8 +60,10 @@ jobs:
       - name: Smoke test installed deb without libobs-dev
         shell: bash
         run: |
-          pkg="$(find build -maxdepth 1 -name '*.deb' -print -quit)"
-          test -n "$pkg"
+          pkg_rel="$(find build -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$pkg_rel"
+          pkg="$(realpath "$pkg_rel")"
+          test -f "$pkg"
           sudo apt-get remove -y libobs-dev
           sudo apt-get install -y "$pkg"
           test ! -e /usr/lib/x86_64-linux-gnu/libobs-opengl.so
