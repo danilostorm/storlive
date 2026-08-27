@@ -19,7 +19,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build pkg-config qt6-base-dev qt6-declarative-dev libobs-dev obs-plugins
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            qt6-base-dev qt6-declarative-dev \
+            qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtqml-workerscript \
+            libobs-dev obs-plugins xvfb xauth
       - name: Configure with libobs
         run: cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=ON -DCMAKE_BUILD_TYPE=Release
       - name: Build
@@ -27,8 +31,30 @@ jobs:
       - name: Verify libobs linkage
         run: |
           ldd build/storlive | grep -E 'libobs\.so'
+      - name: Smoke test GUI startup
+        shell: bash
+        run: |
+          set +e
+          QT_QPA_PLATFORM=xcb xvfb-run -a timeout 8s ./build/storlive >storlive-smoke.log 2>&1
+          code=$?
+          set -e
+          cat storlive-smoke.log || true
+          if [ "$code" -ne 124 ]; then
+            echo "StorLive exited during startup smoke test (exit=$code)" >&2
+            exit 1
+          fi
       - name: Package deb
         run: cd build && cpack -G DEB
+      - name: Verify Debian runtime dependencies
+        shell: bash
+        run: |
+          pkg="$(find build -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$pkg"
+          deps="$(dpkg-deb -f "$pkg" Depends)"
+          echo "$deps"
+          for dep in qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtqml-workerscript obs-plugins; do
+            printf '%s' "$deps" | grep -F "$dep" >/dev/null || { echo "Missing package dependency: $dep" >&2; exit 1; }
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: StorLive-Linux-deb
@@ -64,11 +90,17 @@ jobs:
       - name: Portable ZIP with embedded libobs
         shell: pwsh
         run: ./packaging/windows/make-portable.ps1 -InstallDir dist -OutputDir artifacts -ObsRuntimeRoot .obs-runtime/runtime
-      - name: Verify production backend
+      - name: Verify production backend and portable dependencies
         shell: pwsh
         run: |
           $required = @(
             'dist/storlive.exe',
+            'dist/qt.conf',
+            'dist/MSVCP140.dll',
+            'dist/MSVCP140_1.dll',
+            'dist/MSVCP140_2.dll',
+            'dist/VCRUNTIME140.dll',
+            'dist/VCRUNTIME140_1.dll',
             'dist/obs.dll',
             'dist/libobs-d3d11.dll',
             'dist/obs-plugins/64bit/obs-outputs.dll',
@@ -76,13 +108,27 @@ jobs:
             'dist/obs-plugins/64bit/win-capture.dll',
             'dist/obs-plugins/64bit/win-dshow.dll',
             'dist/obs-plugins/64bit/win-wasapi.dll',
-            'dist/data/libobs'
+            'dist/data/libobs',
+            'dist/qml/QtQuick/Controls/qtquickcontrols2plugin.dll',
+            'dist/qml/QtQuick/Layouts/qquicklayoutsplugin.dll',
+            'dist/platforms/qwindows.dll'
           )
           foreach ($item in $required) {
             if (-not (Test-Path $item)) { throw "Missing production runtime item: $item" }
           }
           $imports = (& dumpbin.exe /nologo /imports dist/storlive.exe) -join "`n"
           if ($imports -notmatch '(?im)^\s*obs\.dll\s*$') { throw 'storlive.exe is not linked to obs.dll' }
+      - name: Smoke test portable startup
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'dist/storlive.exe').Path
+          $process = Start-Process -FilePath $exe -WorkingDirectory (Resolve-Path 'dist').Path -PassThru
+          Start-Sleep -Seconds 5
+          $process.Refresh()
+          if ($process.HasExited) {
+            throw "StorLive exited during Windows startup smoke test (exit=$($process.ExitCode))"
+          }
+          Stop-Process -Id $process.Id -Force
       - uses: actions/upload-artifact@v4
         with:
           name: StorLive-Windows-x64-portable
