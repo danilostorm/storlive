@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(StorLive VERSION 0.1.0 LANGUAGES CXX)
+project(StorLive VERSION 0.1.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -111,7 +111,7 @@ set(CPACK_GENERATOR "DEB")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "danilostorm")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 if(STORLIVE_HAS_LIBOBS)
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "obs-plugins")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "obs-plugins, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtqml-workerscript")
 endif()
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 include(CPack)
