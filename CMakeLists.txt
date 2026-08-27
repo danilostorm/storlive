@@ -66,8 +66,6 @@ qt_add_executable(storlive
 
 set_source_files_properties(resources/qml/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.qml)
 
-# Keep the embedded QML URL stable across Qt 6.4+ and independent of QTP0001.
-# With URI StorLive and RESOURCE_PREFIX "/", Main.qml is always qrc:/StorLive/Main.qml.
 qt_add_qml_module(storlive
     URI StorLive
     VERSION 1.0
@@ -114,7 +112,7 @@ set(CPACK_GENERATOR "DEB")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "danilostorm")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 if(STORLIVE_HAS_LIBOBS)
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "obs-plugins, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtqml-workerscript")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "obs-plugins, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-templates, qml6-module-qtquick-window, qml6-module-qtqml-workerscript")
 endif()
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 include(CPack)
