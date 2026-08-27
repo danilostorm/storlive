@@ -3,9 +3,8 @@
 #include <QMetaObject>
 #include <QMutexLocker>
 
-ObsPreviewProvider::ObsPreviewProvider(QObject *parent)
-    : QObject(parent)
-    , QQuickImageProvider(QQuickImageProvider::Image)
+ObsPreviewProvider::ObsPreviewProvider()
+    : QQuickImageProvider(QQuickImageProvider::Image)
 {
 }
 

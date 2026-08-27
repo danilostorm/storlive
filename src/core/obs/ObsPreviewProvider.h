@@ -2,7 +2,6 @@
 
 #include <QImage>
 #include <QMutex>
-#include <QObject>
 #include <QQuickImageProvider>
 
 #include <atomic>
@@ -15,14 +14,14 @@ extern "C" {
 }
 #endif
 
-class ObsPreviewProvider final : public QObject, public QQuickImageProvider
+class ObsPreviewProvider final : public QQuickImageProvider
 {
     Q_OBJECT
     Q_PROPERTY(qulonglong revision READ revision NOTIFY frameChanged)
     Q_PROPERTY(bool active READ active NOTIFY activeChanged)
 
 public:
-    explicit ObsPreviewProvider(QObject *parent = nullptr);
+    ObsPreviewProvider();
     ~ObsPreviewProvider() override;
 
     bool start();
