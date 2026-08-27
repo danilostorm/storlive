@@ -21,6 +21,7 @@ class AppController final : public QObject
     Q_PROPERTY(QStringList sources READ sources NOTIFY sourcesChanged)
     Q_PROPERTY(QStringList encoderOptions READ encoderOptions CONSTANT)
     Q_PROPERTY(QString encoderMode READ encoderMode WRITE setEncoderMode NOTIFY encoderModeChanged)
+    Q_PROPERTY(QVariantMap streamProfile READ streamProfile NOTIFY streamProfileChanged)
     Q_PROPERTY(QString engineStatus READ engineStatus NOTIFY statusChanged)
     Q_PROPERTY(QString activityStatus READ activityStatus NOTIFY statusChanged)
     Q_PROPERTY(QVariantList outputStats READ outputStats NOTIFY statsChanged)
@@ -36,6 +37,7 @@ public:
     QStringList sources() const { return m_scenes.sourceNames(); }
     QStringList encoderOptions() const;
     QString encoderMode() const { return m_encoderMode; }
+    QVariantMap streamProfile() const;
     QString engineStatus() const { return m_obs.status(); }
     QString activityStatus() const { return m_activityStatus; }
     QVariantList outputStats() const { return m_outputStats; }
@@ -46,6 +48,11 @@ public:
     Q_INVOKABLE void setDestinationEnabled(int index, bool enabled);
     Q_INVOKABLE void setDestinationCredentials(int index, const QString &server, const QString &streamKey);
     Q_INVOKABLE void addCustomDestination(const QString &name, const QString &server, const QString &streamKey);
+    Q_INVOKABLE QVariantMap setStreamProfile(int width,
+                                             int height,
+                                             int fps,
+                                             int videoBitrateKbps,
+                                             int audioBitrateKbps);
     Q_INVOKABLE QVariantMap addSource(const QString &kind);
     Q_INVOKABLE QVariantList sourceProperties(const QString &sourceName) const;
     Q_INVOKABLE QVariantMap setSourceProperty(const QString &sourceName,
@@ -59,6 +66,7 @@ signals:
     void destinationsChanged();
     void sourcesChanged();
     void encoderModeChanged();
+    void streamProfileChanged();
     void statusChanged();
     void statsChanged();
 
@@ -74,6 +82,7 @@ private:
     QVector<StreamDestination> m_destinations;
     QTimer m_statsTimer;
     QVariantList m_outputStats;
+    EncodeProfile m_streamProfile;
     QString m_encoderMode {QStringLiteral("Automático")};
     QString m_activityStatus {QStringLiteral("Pronto para configurar")};
 };

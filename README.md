@@ -26,6 +26,7 @@ A base atual contém:
 - detecção/adicionamento das fontes de captura fornecidas pelos plugins instalados;
 - editor genérico das propriedades OBS da fonte (listas, bool, inteiro, decimal e texto), permitindo escolher janela/dispositivo quando o plugin expõe essa opção;
 - preview real via `video_output` do libobs convertido para BGRA e limitado na UI a até 960×540/~30 fps;
+- perfil de saída configurável pela UI: 1080p/720p, 30/60 fps, bitrate de vídeo e áudio;
 - encoder H.264 automático/hardware/software + AAC;
 - multi-output RTMP real no backend libobs;
 - compartilhamento do mesmo par de encoders entre destinos com perfil idêntico;
@@ -39,8 +40,9 @@ A base atual contém:
 ### Limites atuais
 
 - Propriedades OBS especiais como botões, seletor de arquivos avançado, fontes e frame-rate ainda não possuem controles próprios; as propriedades comuns de seleção/configuração já são tratadas.
-- O CI Linux compila com libobs. O Windows portable ainda compila a UI/core sem libobs enquanto o SDK/runtime do OBS é integrado ao pacote MSVC; por isso o preview real fica desativado nesse build Windows atual.
-- O preview usa cópia de frame para a UI nesta fase; a transmissão/encode não é reduzida e continua usando a resolução configurada no engine.
+- O CI Linux compila com libobs. O Windows portable ainda compila a UI/core sem libobs enquanto o SDK/runtime do OBS é integrado ao pacote MSVC; por isso o preview/captura/transmissão real ficam desativados nesse build Windows atual.
+- O preview usa cópia de frame para a UI nesta fase; a transmissão/encode continua usando o perfil selecionado.
+- Alterar o perfil durante uma transmissão ativa prepara a nova configuração para a próxima inicialização dos outputs.
 - Stream keys ficam somente em memória nesta fase; nenhuma chave do sistema legado foi importada.
 
 ## Build rápido

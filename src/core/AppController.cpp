@@ -43,6 +43,7 @@ void AppController::addPreset(QString id, QString name, QString server)
     destination.id = std::move(id);
     destination.name = std::move(name);
     destination.server = std::move(server);
+    destination.profile = m_streamProfile;
     m_destinations.append(std::move(destination));
 }
 
@@ -66,6 +67,22 @@ QStringList AppController::encoderOptions() const
         QStringLiteral("Automático"),
         QStringLiteral("Hardware"),
         QStringLiteral("Software (x264)")
+    };
+}
+
+QVariantMap AppController::streamProfile() const
+{
+    return {
+        {QStringLiteral("width"), m_streamProfile.width},
+        {QStringLiteral("height"), m_streamProfile.height},
+        {QStringLiteral("fps"), m_streamProfile.fps},
+        {QStringLiteral("videoBitrateKbps"), m_streamProfile.videoBitrateKbps},
+        {QStringLiteral("audioBitrateKbps"), m_streamProfile.audioBitrateKbps},
+        {QStringLiteral("label"), QStringLiteral("%1x%2 @ %3 fps • %4 kbps")
+                                      .arg(m_streamProfile.width)
+                                      .arg(m_streamProfile.height)
+                                      .arg(m_streamProfile.fps)
+                                      .arg(m_streamProfile.videoBitrateKbps)}
     };
 }
 
@@ -109,8 +126,46 @@ void AppController::addCustomDestination(const QString &name, const QString &ser
     destination.server = server.trimmed();
     destination.streamKey = streamKey.trimmed();
     destination.enabled = true;
+    destination.profile = m_streamProfile;
     m_destinations.append(std::move(destination));
     emit destinationsChanged();
+}
+
+QVariantMap AppController::setStreamProfile(int width,
+                                             int height,
+                                             int fps,
+                                             int videoBitrateKbps,
+                                             int audioBitrateKbps)
+{
+    const bool supportedResolution = (width == 1920 && height == 1080)
+        || (width == 1280 && height == 720);
+    if (!supportedResolution || (fps != 30 && fps != 60)) {
+        const QString error = QStringLiteral("Perfil inválido: use 1920x1080 ou 1280x720 em 30/60 fps");
+        m_activityStatus = error;
+        emit statusChanged();
+        return {{QStringLiteral("ok"), false}, {QStringLiteral("error"), error}};
+    }
+
+    videoBitrateKbps = qBound(1000, videoBitrateKbps, 20000);
+    audioBitrateKbps = qBound(64, audioBitrateKbps, 320);
+
+    m_streamProfile.width = width;
+    m_streamProfile.height = height;
+    m_streamProfile.fps = fps;
+    m_streamProfile.videoBitrateKbps = videoBitrateKbps;
+    m_streamProfile.audioBitrateKbps = audioBitrateKbps;
+
+    for (auto &destination : m_destinations)
+        destination.profile = m_streamProfile;
+
+    m_activityStatus = m_outputStats.isEmpty()
+        ? QStringLiteral("Perfil atualizado: %1").arg(streamProfile().value(QStringLiteral("label")).toString())
+        : QStringLiteral("Perfil atualizado • reinicie a transmissão para aplicar aos outputs ativos");
+
+    emit streamProfileChanged();
+    emit destinationsChanged();
+    emit statusChanged();
+    return {{QStringLiteral("ok"), true}, {QStringLiteral("error"), QString()}};
 }
 
 QVariantMap AppController::addSource(const QString &kind)

@@ -17,6 +17,11 @@ ApplicationWindow {
     property color textPrimary: "#f4f5f7"
     property color textMuted: "#9ea6b4"
 
+    function applyProfile() {
+        var resolution = resolutionBox.currentText === "1280×720" ? [1280, 720] : [1920, 1080]
+        controller.setStreamProfile(resolution[0], resolution[1], Number(fpsBox.currentText), videoBitrate.value, Number(audioBitrateBox.currentText))
+    }
+
     Dialog {
         id: destinationDialog
         modal: true
@@ -355,26 +360,26 @@ ApplicationWindow {
             }
 
             Rectangle {
-                Layout.preferredWidth: 350
+                Layout.preferredWidth: 360
                 Layout.fillHeight: true
                 radius: 10
                 color: root.panel
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 14
-                    spacing: 10
+                    spacing: 8
                     Label { text: "DESTINOS"; color: root.textMuted; font.bold: true }
 
                     Repeater {
                         model: controller.destinations
                         delegate: Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 72
+                            Layout.preferredHeight: 66
                             radius: 8
                             color: root.panel2
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 9
+                                anchors.margins: 8
                                 Switch {
                                     checked: modelData.enabled
                                     onToggled: controller.setDestinationEnabled(index, checked)
@@ -403,6 +408,56 @@ ApplicationWindow {
                     }
 
                     GroupBox {
+                        title: "Qualidade de saída"
+                        Layout.fillWidth: true
+                        GridLayout {
+                            anchors.fill: parent
+                            columns: 2
+                            columnSpacing: 8
+                            rowSpacing: 6
+
+                            Label { text: "Resolução"; color: root.textMuted }
+                            ComboBox {
+                                id: resolutionBox
+                                Layout.fillWidth: true
+                                model: ["1920×1080", "1280×720"]
+                                currentIndex: controller.streamProfile.width === 1280 ? 1 : 0
+                                onActivated: root.applyProfile()
+                            }
+
+                            Label { text: "FPS"; color: root.textMuted }
+                            ComboBox {
+                                id: fpsBox
+                                Layout.fillWidth: true
+                                model: ["60", "30"]
+                                currentIndex: controller.streamProfile.fps === 30 ? 1 : 0
+                                onActivated: root.applyProfile()
+                            }
+
+                            Label { text: "Vídeo kbps"; color: root.textMuted }
+                            SpinBox {
+                                id: videoBitrate
+                                Layout.fillWidth: true
+                                from: 1000
+                                to: 20000
+                                stepSize: 500
+                                editable: true
+                                value: controller.streamProfile.videoBitrateKbps
+                                onValueModified: root.applyProfile()
+                            }
+
+                            Label { text: "Áudio kbps"; color: root.textMuted }
+                            ComboBox {
+                                id: audioBitrateBox
+                                Layout.fillWidth: true
+                                model: ["128", "160", "192", "256", "320"]
+                                currentIndex: Math.max(0, model.indexOf(String(controller.streamProfile.audioBitrateKbps)))
+                                onActivated: root.applyProfile()
+                            }
+                        }
+                    }
+
+                    GroupBox {
                         title: "Encoder"
                         Layout.fillWidth: true
                         ColumnLayout {
@@ -413,7 +468,7 @@ ApplicationWindow {
                                 currentIndex: controller.encoderOptions.indexOf(controller.encoderMode)
                                 onActivated: controller.encoderMode = currentText
                             }
-                            Label { text: "Perfis iguais reutilizam o mesmo encode H.264/AAC."; color: root.textMuted; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 11 }
+                            Label { text: "Destinos com perfil igual reutilizam o mesmo H.264/AAC."; color: root.textMuted; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 11 }
                         }
                     }
                     Item { Layout.fillHeight: true }
@@ -434,7 +489,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Label { text: "ÁUDIO / SAÍDA"; color: root.textMuted; font.bold: true }
                     Label { text: controller.outputStats.length > 0 ? (controller.outputStats.length + " saída(s) monitorada(s)") : "Nenhuma transmissão ativa"; color: root.textPrimary }
-                    Label { text: "1080p60 • 48 kHz • preview até 960×540/30 fps • reconexão independente"; color: root.textMuted; font.pixelSize: 11 }
+                    Label { text: controller.streamProfile.label + " • áudio " + controller.streamProfile.audioBitrateKbps + " kbps • preview até 960×540/30 fps"; color: root.textMuted; font.pixelSize: 11 }
                 }
                 ColumnLayout {
                     Layout.preferredWidth: 470
