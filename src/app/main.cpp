@@ -24,6 +24,7 @@ void appendStartupLog(const QString &message)
     QTextStream stream(&file);
     stream << QDateTime::currentDateTime().toString(Qt::ISODate)
            << "  " << message << '\n';
+    stream.flush();
 }
 }
 
@@ -35,9 +36,12 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.1"));
 
     appendStartupLog(QStringLiteral("StorLive 0.1.1 iniciando"));
-
+    appendStartupLog(QStringLiteral("Criando AppController"));
     AppController controller;
+    appendStartupLog(QStringLiteral("AppController criado"));
+
     QQmlApplicationEngine engine;
+    appendStartupLog(QStringLiteral("QQmlApplicationEngine criado"));
 
     QObject::connect(&engine, &QQmlApplicationEngine::warnings, &engine,
                      [](const QList<QQmlError> &warnings) {
@@ -45,12 +49,16 @@ int main(int argc, char *argv[])
             appendStartupLog(QStringLiteral("QML: %1").arg(warning.toString()));
     });
 
+    appendStartupLog(QStringLiteral("Criando preview provider"));
     auto *previewProvider = new ObsPreviewProvider;
-    previewProvider->start();
+    const bool previewStarted = previewProvider->start();
+    appendStartupLog(QStringLiteral("Preview provider criado; ativo=%1").arg(previewStarted));
     engine.addImageProvider(QStringLiteral("preview"), previewProvider);
 
     engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
     engine.rootContext()->setContextProperty(QStringLiteral("previewProvider"), previewProvider);
+
+    appendStartupLog(QStringLiteral("Carregando qrc:/StorLive/Main.qml"));
     engine.load(QUrl(QStringLiteral("qrc:/StorLive/Main.qml")));
 
     if (engine.rootObjects().isEmpty()) {
