@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 
     engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
     engine.rootContext()->setContextProperty(QStringLiteral("previewProvider"), previewProvider);
-    engine.load(QUrl(QStringLiteral("qrc:/qt/qml/StorLive/Main.qml")));
+    engine.load(QUrl(QStringLiteral("qrc:/StorLive/Main.qml")));
 
     if (engine.rootObjects().isEmpty()) {
         appendStartupLog(QStringLiteral("Falha fatal: a janela QML não foi criada"));
