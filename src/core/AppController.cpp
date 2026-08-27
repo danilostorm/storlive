@@ -1,6 +1,7 @@
 #include "AppController.h"
 
 #include <QUuid>
+#include <utility>
 
 AppController::AppController(QObject *parent)
     : QObject(parent)
