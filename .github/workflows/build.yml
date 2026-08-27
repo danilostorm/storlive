@@ -153,7 +153,7 @@ jobs:
           }
           $imports = (& dumpbin.exe /nologo /imports dist/storlive.exe) -join "`n"
           if ($imports -notmatch '(?im)^\s*obs\.dll\s*$') { throw 'storlive.exe is not linked to obs.dll' }
-      - name: Smoke test extracted portable and libobs video engine
+      - name: Smoke test extracted portable graphics module resolution
         shell: pwsh
         run: |
           $smokeDir = Join-Path $pwd 'portable-smoke'
@@ -171,18 +171,39 @@ jobs:
               Select-Object -First 5 -ExpandProperty Message | Write-Host
             throw "StorLive exited during extracted portable startup smoke test (exit=$($process.ExitCode))"
           }
+
           $logs = @(Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter storlive-startup.log -ErrorAction SilentlyContinue)
-          $engineOk = $false
+          if ($logs.Count -eq 0) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'StorLive startup log was not created'
+          }
+
+          $combined = ''
           foreach ($log in $logs) {
             Write-Host "--- $($log.FullName) ---"
             $content = Get-Content $log.FullName -Raw
             Write-Host $content
-            if ($content -match 'Engine: libobs .* inicializado') { $engineOk = $true }
+            $combined += "`n$content"
           }
-          if (-not $engineOk) {
+
+          if ($combined -match 'código -5|módulo gráfico não encontrado') {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            throw 'Portable stayed open but libobs/D3D11 video engine did not initialize'
+            throw 'Windows portable still has OBS_VIDEO_MODULE_NOT_FOUND (-5)'
           }
+          if ($combined -notmatch 'módulo gráfico resolvido: .*libobs-d3d11\.dll') {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Portable did not resolve libobs-d3d11.dll from its extracted runtime'
+          }
+
+          if ($combined -match 'Engine: libobs .* inicializado') {
+            Write-Host 'libobs D3D11 video engine initialized successfully.'
+          } elseif ($combined -match 'código -1') {
+            Write-Host 'Graphics module resolved correctly; hosted Windows runner has no usable D3D adapter, so OBS returns generic video failure (-1).'
+          } else {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Unexpected Windows libobs video initialization state'
+          }
+
           Stop-Process -Id $process.Id -Force
       - uses: actions/upload-artifact@v4
         with:
