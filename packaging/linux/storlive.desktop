@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=StorLive
+Comment=Multi-live desktop broadcaster
+Exec=storlive
+Icon=video-display
+Terminal=false
+Categories=AudioVideo;Network;

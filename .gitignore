@@ -1,0 +1,15 @@
+build/
+dist/
+artifacts/
+CMakeUserPresets.json
+.vscode/
+.idea/
+*.user
+*.log
+*.zip
+*.deb
+*.exe
+*.dll
+*.so
+*.dylib
+.DS_Store
