@@ -12,6 +12,10 @@
 #include "core/AppController.h"
 #include "core/obs/ObsPreviewProvider.h"
 
+#ifndef STORLIVE_VERSION
+#define STORLIVE_VERSION "0.0.0-dev"
+#endif
+
 namespace {
 void appendStartupLog(const QString &message)
 {
@@ -33,12 +37,15 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("StorLive"));
     QCoreApplication::setApplicationName(QStringLiteral("StorLive"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.1.1"));
 
-    appendStartupLog(QStringLiteral("StorLive 0.1.1 iniciando"));
+    const QString version = QString::fromLatin1(STORLIVE_VERSION);
+    QCoreApplication::setApplicationVersion(version);
+
+    appendStartupLog(QStringLiteral("StorLive %1 iniciando").arg(version));
     appendStartupLog(QStringLiteral("Criando AppController"));
     AppController controller;
     appendStartupLog(QStringLiteral("AppController criado"));
+    appendStartupLog(QStringLiteral("Engine: %1").arg(controller.engineStatus()));
 
     QQmlApplicationEngine engine;
     appendStartupLog(QStringLiteral("QQmlApplicationEngine criado"));
@@ -65,6 +72,9 @@ int main(int argc, char *argv[])
         appendStartupLog(QStringLiteral("Falha fatal: a janela QML não foi criada"));
         return EXIT_FAILURE;
     }
+
+    engine.rootObjects().constFirst()->setProperty(
+        "title", QStringLiteral("StorLive %1").arg(version));
 
     appendStartupLog(QStringLiteral("Janela principal criada com sucesso"));
     return app.exec();

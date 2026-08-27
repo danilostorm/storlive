@@ -35,6 +35,7 @@ jobs:
       - name: Smoke test development build
         shell: bash
         run: |
+          find "$HOME/.local/share" -name storlive-startup.log -delete 2>/dev/null || true
           set +e
           QT_QPA_PLATFORM=xcb xvfb-run -a timeout 8s ./build/storlive >storlive-smoke.log 2>&1
           code=$?
@@ -45,6 +46,10 @@ jobs:
             echo "StorLive exited during development startup smoke test (exit=$code)" >&2
             exit 1
           fi
+          grep -R -F "Engine: libobs " "$HOME/.local/share/StorLive" >/dev/null || {
+            echo "libobs engine did not initialize in development smoke test" >&2
+            exit 1
+          }
       - name: Package deb
         run: cd build && cpack -G DEB
       - name: Verify Debian runtime dependencies
@@ -68,6 +73,7 @@ jobs:
           sudo apt-get install -y "$pkg"
           test ! -e /usr/lib/x86_64-linux-gnu/libobs-opengl.so
           test -e /usr/lib/x86_64-linux-gnu/libobs-opengl.so.30
+          find "$HOME/.local/share" -name storlive-startup.log -delete 2>/dev/null || true
           set +e
           QT_QPA_PLATFORM=xcb xvfb-run -a timeout 8s /usr/bin/storlive >storlive-installed-smoke.log 2>&1
           code=$?
@@ -78,6 +84,10 @@ jobs:
             echo "Installed StorLive exited during startup smoke test (exit=$code)" >&2
             exit 1
           fi
+          grep -R -F "Engine: libobs " "$HOME/.local/share/StorLive" >/dev/null || {
+            echo "Installed .deb stayed open but libobs video engine did not initialize" >&2
+            exit 1
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: StorLive-Linux-deb
@@ -143,26 +153,35 @@ jobs:
           }
           $imports = (& dumpbin.exe /nologo /imports dist/storlive.exe) -join "`n"
           if ($imports -notmatch '(?im)^\s*obs\.dll\s*$') { throw 'storlive.exe is not linked to obs.dll' }
-      - name: Smoke test extracted portable startup
+      - name: Smoke test extracted portable and libobs video engine
         shell: pwsh
         run: |
           $smokeDir = Join-Path $pwd 'portable-smoke'
           Remove-Item $smokeDir -Recurse -Force -ErrorAction SilentlyContinue
           Expand-Archive -Path 'artifacts/StorLive-Windows-x64-portable.zip' -DestinationPath $smokeDir -Force
+          Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter storlive-startup.log -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
           $exe = (Resolve-Path (Join-Path $smokeDir 'storlive.exe')).Path
           $process = Start-Process -FilePath $exe -WorkingDirectory $env:TEMP -PassThru
-          Start-Sleep -Seconds 5
+          Start-Sleep -Seconds 8
           $process.Refresh()
           if ($process.HasExited) {
             Write-Host "StorLive exited with code $($process.ExitCode)"
-            Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter storlive-startup.log -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "--- $($_.FullName) ---"
-              Get-Content $_.FullName
-            }
             Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue |
               Where-Object { $_.Message -match 'storlive\.exe' } |
               Select-Object -First 5 -ExpandProperty Message | Write-Host
             throw "StorLive exited during extracted portable startup smoke test (exit=$($process.ExitCode))"
+          }
+          $logs = @(Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter storlive-startup.log -ErrorAction SilentlyContinue)
+          $engineOk = $false
+          foreach ($log in $logs) {
+            Write-Host "--- $($log.FullName) ---"
+            $content = Get-Content $log.FullName -Raw
+            Write-Host $content
+            if ($content -match 'Engine: libobs .* inicializado') { $engineOk = $true }
+          }
+          if (-not $engineOk) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw 'Portable stayed open but libobs/D3D11 video engine did not initialize'
           }
           Stop-Process -Id $process.Id -Force
       - uses: actions/upload-artifact@v4

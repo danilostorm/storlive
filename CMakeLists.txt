@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(StorLive VERSION 0.1.1 LANGUAGES CXX)
+project(StorLive VERSION 0.1.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -75,6 +75,7 @@ qt_add_qml_module(storlive
 )
 
 target_include_directories(storlive PRIVATE src)
+target_compile_definitions(storlive PRIVATE STORLIVE_VERSION=\"${PROJECT_VERSION}\")
 
 target_link_libraries(storlive PRIVATE
     Qt6::Core

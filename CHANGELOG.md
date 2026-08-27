@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.2
+
+- Corrige `OBS_VIDEO_MODULE_NOT_FOUND (-5)` ao resolver o módulo gráfico do libobs pelo runtime real do sistema.
+- Linux agora usa o módulo OpenGL versionado disponível no pacote `libobs0t64`, sem depender do symlink instalado por `libobs-dev`.
+- Windows resolve `libobs-d3d11.dll` a partir da própria pasta do portable.
+- CI instala e abre o `.deb` depois de remover `libobs-dev`, reproduzindo uma instalação de usuário final.
+- CI extrai o ZIP Windows em outra pasta e inicia o aplicativo com diretório de trabalho independente.
+- CI passa a exigir confirmação explícita de que o engine libobs inicializou, e não apenas que a janela permaneceu aberta.
+- A versão exibida na janela passa a acompanhar automaticamente a versão do build.
+
+## 0.1.1
+
+- Corrige dependências Qt/QML ausentes nos pacotes de runtime.
+- Inclui o runtime MSVC necessário no portable Windows.
+- Adiciona smoke tests de abertura da interface em Linux e Windows.
+- Evita consultar fontes do libobs quando a inicialização do engine falha.
+
 ## 0.1.0
 
 - Desktop rewrite in C++20 + Qt Quick.
