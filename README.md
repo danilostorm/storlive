@@ -25,6 +25,7 @@ A base atual contém:
 - cena `Gameplay` real do libobs;
 - detecção/adicionamento das fontes de captura fornecidas pelos plugins instalados;
 - editor genérico das propriedades OBS da fonte (listas, bool, inteiro, decimal e texto), permitindo escolher janela/dispositivo quando o plugin expõe essa opção;
+- preview real via `video_output` do libobs convertido para BGRA e limitado na UI a até 960×540/~30 fps;
 - encoder H.264 automático/hardware/software + AAC;
 - multi-output RTMP real no backend libobs;
 - compartilhamento do mesmo par de encoders entre destinos com perfil idêntico;
@@ -37,9 +38,9 @@ A base atual contém:
 
 ### Limites atuais
 
-- O preview ainda é um placeholder no Qt Quick; a cena já alimenta a saída do libobs, mas falta renderizá-la dentro da janela.
 - Propriedades OBS especiais como botões, seletor de arquivos avançado, fontes e frame-rate ainda não possuem controles próprios; as propriedades comuns de seleção/configuração já são tratadas.
-- O CI Linux compila com libobs. O Windows portable ainda compila a UI/core sem libobs enquanto o SDK/runtime do OBS é integrado ao pacote MSVC.
+- O CI Linux compila com libobs. O Windows portable ainda compila a UI/core sem libobs enquanto o SDK/runtime do OBS é integrado ao pacote MSVC; por isso o preview real fica desativado nesse build Windows atual.
+- O preview usa cópia de frame para a UI nesta fase; a transmissão/encode não é reduzida e continua usando a resolução configurada no engine.
 - Stream keys ficam somente em memória nesta fase; nenhuma chave do sistema legado foi importada.
 
 ## Build rápido
@@ -71,7 +72,7 @@ Quando um bundle/SDK compatível do OBS/libobs for integrado ao Windows, o CMake
 
 ```text
 src/app              inicialização do aplicativo
-src/core/obs         engine, cenas e fontes libobs
+src/core/obs         engine, cenas, fontes e preview libobs
 src/core/streaming   perfis, destinos e multi-output
 src/core             controller da aplicação
 resources/qml        interface Qt Quick

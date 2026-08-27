@@ -50,6 +50,8 @@ qt_add_executable(storlive
     src/core/AppController.h
     src/core/obs/ObsEngine.cpp
     src/core/obs/ObsEngine.h
+    src/core/obs/ObsPreviewProvider.cpp
+    src/core/obs/ObsPreviewProvider.h
     src/core/obs/SceneManager.cpp
     src/core/obs/SceneManager.h
     src/core/streaming/StreamDestination.h

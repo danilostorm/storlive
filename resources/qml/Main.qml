@@ -306,12 +306,51 @@ ApplicationWindow {
                 radius: 10
                 color: "#0b0d11"
                 border.color: "#2b303b"
+                clip: true
+
+                Image {
+                    id: obsPreview
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    source: previewProvider.active ? ("image://preview/live?rev=" + previewProvider.revision) : ""
+                    fillMode: Image.PreserveAspectFit
+                    cache: false
+                    smooth: true
+                }
+
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.margins: 12
+                    width: previewBadge.implicitWidth + 18
+                    height: 28
+                    radius: 6
+                    color: "#99000000"
+                    Label {
+                        id: previewBadge
+                        anchors.centerIn: parent
+                        text: previewProvider.active ? "PREVIEW • LIVE" : "PREVIEW"
+                        color: previewProvider.active ? "#70d6a8" : "#9ea6b4"
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                }
+
                 ColumnLayout {
                     anchors.centerIn: parent
-                    spacing: 12
-                    Label { text: "PREVIEW"; color: "#596172"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                    Label { text: "Cena Gameplay está conectada à saída do libobs"; color: root.textMuted; Layout.alignment: Qt.AlignHCenter }
-                    Label { text: "Renderização do preview na UI entra na próxima camada gráfica"; color: "#6e7686"; Layout.alignment: Qt.AlignHCenter }
+                    spacing: 8
+                    visible: !previewProvider.active || controller.sources.length === 0
+                    Label {
+                        text: controller.sources.length === 0 ? "Adicione uma fonte para visualizar a cena" : "Preview indisponível neste build"
+                        color: root.textMuted
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                    Label {
+                        text: previewProvider.active ? "A cena Gameplay está pronta." : "O preview real requer libobs ativo."
+                        color: "#6e7686"
+                        font.pixelSize: 11
+                        Layout.alignment: Qt.AlignHCenter
+                    }
                 }
             }
 
@@ -395,7 +434,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Label { text: "ÁUDIO / SAÍDA"; color: root.textMuted; font.bold: true }
                     Label { text: controller.outputStats.length > 0 ? (controller.outputStats.length + " saída(s) monitorada(s)") : "Nenhuma transmissão ativa"; color: root.textPrimary }
-                    Label { text: "1080p60 • 48 kHz • reconexão independente"; color: root.textMuted; font.pixelSize: 11 }
+                    Label { text: "1080p60 • 48 kHz • preview até 960×540/30 fps • reconexão independente"; color: root.textMuted; font.pixelSize: 11 }
                 }
                 ColumnLayout {
                     Layout.preferredWidth: 470
