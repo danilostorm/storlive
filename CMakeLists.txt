@@ -8,7 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 
 option(STORLIVE_WITH_LIBOBS "Build with libobs integration" ON)
-set(STORLIVE_OBS_ROOT "" CACHE PATH "Optional OBS/libobs root for Windows portable builds")
+set(STORLIVE_OBS_ROOT "" CACHE PATH "Optional OBS/libobs SDK root for Windows portable builds")
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick QuickControls2)
 qt_standard_project_setup(REQUIRES 6.4)
@@ -20,13 +20,14 @@ if(STORLIVE_WITH_LIBOBS)
         find_path(STORLIVE_LIBOBS_INCLUDE_DIR
             NAMES obs.h
             PATHS
-                "${STORLIVE_OBS_ROOT}/include"
                 "${STORLIVE_OBS_ROOT}/include/obs"
+                "${STORLIVE_OBS_ROOT}/include"
                 "${STORLIVE_OBS_ROOT}/libobs"
             NO_DEFAULT_PATH)
         find_library(STORLIVE_LIBOBS_LIBRARY
             NAMES obs libobs
             PATHS
+                "${STORLIVE_OBS_ROOT}/lib/64bit"
                 "${STORLIVE_OBS_ROOT}/bin/64bit"
                 "${STORLIVE_OBS_ROOT}/lib"
             NO_DEFAULT_PATH)
@@ -42,6 +43,10 @@ if(STORLIVE_WITH_LIBOBS)
             endif()
         endif()
     endif()
+endif()
+
+if(STORLIVE_WITH_LIBOBS AND NOT STORLIVE_HAS_LIBOBS)
+    message(FATAL_ERROR "STORLIVE_WITH_LIBOBS=ON but libobs was not found. Production builds must not fall back to the UI-only stub.")
 endif()
 
 qt_add_executable(storlive
@@ -86,8 +91,6 @@ if(STORLIVE_HAS_LIBOBS)
         target_link_libraries(storlive PRIVATE PkgConfig::LIBOBS)
     endif()
     message(STATUS "StorLive: libobs backend enabled")
-else()
-    message(WARNING "StorLive: libobs not found; building UI/core scaffold without capture backend")
 endif()
 
 if(WIN32)
@@ -96,6 +99,7 @@ if(WIN32)
 else()
     install(TARGETS storlive RUNTIME DESTINATION bin BUNDLE DESTINATION .)
     install(FILES packaging/linux/storlive.desktop DESTINATION share/applications)
+    install(FILES LICENSE DESTINATION share/doc/storlive)
 endif()
 
 set(CPACK_PACKAGE_NAME "storlive")

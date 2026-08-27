@@ -3,9 +3,13 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   linux:
@@ -20,12 +24,16 @@ jobs:
         run: cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=ON -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build
+      - name: Verify libobs linkage
+        run: |
+          ldd build/storlive | grep -E 'libobs\.so'
       - name: Package deb
         run: cd build && cpack -G DEB
       - uses: actions/upload-artifact@v4
         with:
           name: StorLive-Linux-deb
           path: build/*.deb
+          retention-days: 30
 
   windows:
     runs-on: windows-2025
@@ -41,19 +49,64 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-      - name: Configure
+      - name: Prepare OBS 30.0.2 runtime and SDK
         shell: pwsh
-        run: cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl
+        run: ./packaging/windows/prepare-obs-runtime.ps1 -Version 30.0.2 -WorkDir .obs-runtime
+      - name: Configure with libobs
+        shell: pwsh
+        run: cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=ON -DSTORLIVE_OBS_ROOT="$pwd/.obs-runtime/sdk" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl
       - name: Build
         shell: pwsh
         run: cmake --build build
       - name: Install
         shell: pwsh
         run: cmake --install build --prefix dist
-      - name: Portable ZIP
+      - name: Portable ZIP with embedded libobs
         shell: pwsh
-        run: ./packaging/windows/make-portable.ps1 -InstallDir dist -OutputDir artifacts
+        run: ./packaging/windows/make-portable.ps1 -InstallDir dist -OutputDir artifacts -ObsRuntimeRoot .obs-runtime/runtime
+      - name: Verify production backend
+        shell: pwsh
+        run: |
+          $required = @(
+            'dist/storlive.exe',
+            'dist/obs.dll',
+            'dist/libobs-d3d11.dll',
+            'dist/obs-plugins/64bit/obs-outputs.dll',
+            'dist/obs-plugins/64bit/rtmp-services.dll',
+            'dist/obs-plugins/64bit/win-capture.dll',
+            'dist/obs-plugins/64bit/win-dshow.dll',
+            'dist/obs-plugins/64bit/win-wasapi.dll',
+            'dist/data/libobs'
+          )
+          foreach ($item in $required) {
+            if (-not (Test-Path $item)) { throw "Missing production runtime item: $item" }
+          }
+          $imports = (& dumpbin.exe /nologo /imports dist/storlive.exe) -join "`n"
+          if ($imports -notmatch '(?im)^\s*obs\.dll\s*$') { throw 'storlive.exe is not linked to obs.dll' }
       - uses: actions/upload-artifact@v4
         with:
           name: StorLive-Windows-x64-portable
           path: artifacts/*.zip
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd release-artifacts
+          find . -type f \( -name '*.zip' -o -name '*.deb' \) -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mapfile -t files < <(find release-artifacts -type f \( -name '*.zip' -o -name '*.deb' \) -print)
+          files+=("release-artifacts/SHA256SUMS.txt")
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" --repo "$GITHUB_REPOSITORY" --title "StorLive $GITHUB_REF_NAME" --generate-notes

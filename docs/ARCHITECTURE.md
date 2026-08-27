@@ -1,77 +1,46 @@
-# Arquitetura do StorLive
+# Architecture
 
-## Princípio
+StorLive is a Qt Quick/C++ desktop application that embeds libobs as the media engine while keeping its own small multi-live interface.
 
-StorLive não tenta duplicar toda a interface do OBS Studio. O objetivo é usar o libobs como engine e manter uma camada de produto pequena, centrada em multi-live.
+## Runtime layers
 
-```text
-Qt/QML UI
-   |
-AppController
-   |
-   +-- SceneManager -> obs_scene_t -> fontes de captura
-   +-- Audio/Video 1080p60 / 48 kHz
-   +-- Encoder selection
-   +-- MultiOutputManager
-             |
-             +-- Encode profile A -> YouTube / Twitch / Kick
-             +-- Encode profile B -> outro bitrate/resolução
-   |
-ObsEngine / libobs
-```
+1. **Qt/QML UI** — destination configuration, source list, source properties, preview, profile and live controls.
+2. **AppController** — application state exposed to QML.
+3. **SceneManager** — creates the `Gameplay` libobs scene, capture/audio sources, default composition, source properties and source controls.
+4. **ObsPreviewProvider** — receives a scaled BGRA view from libobs' video output for the UI preview. It does not create a second encoder.
+5. **MultiOutputManager** — validates destinations, groups destinations by encode profile, creates H.264/AAC encoders and attaches independent RTMP outputs/services.
+6. **ObsEngine** — starts libobs, configures 1080p60/48 kHz base media, resolves portable/system data paths and loads modules.
 
-## Regra de encode compartilhado
+## Multi-output model
 
-Cada destino recebe uma assinatura de perfil:
+Destinations with the same `EncodeProfile::signature()` share one video encoder and one audio encoder. Each destination still owns an independent `rtmp_output` and `rtmp_custom` service, so transport/reconnection failures remain isolated per destination.
 
-`codec:widthxheight:fps:videoBitrate:audioBitrate`
+The output profile can be 1080p or 720p at 30/60 fps. The base compositor remains 1080p60; per-profile scaling and 30 fps frame division happen at the encoder.
 
-Destinos ativos com a mesma assinatura entram no mesmo grupo. O backend cria **um encoder de vídeo e um encoder de áudio por grupo** e associa esses mesmos encoders a todos os `obs_output_t` daquele grupo.
+## Encoder selection
 
-Se uma plataforma exigir outro bitrate/resolução/codec, ela recebe outro grupo.
+- **Automático**: hardware H.264 when a compatible registered encoder is found, otherwise x264/fallback H.264.
+- **Hardware**: requires NVENC, AMF, QSV or another recognized hardware H.264 backend.
+- **Software (x264)**: prefers `obs_x264`.
 
-## Outputs
+AAC is selected from the registered libobs encoders, preferring `ffmpeg_aac`.
 
-Cada destino possui:
+## Windows portable
 
-- `rtmp_custom` service próprio;
-- `rtmp_output` próprio;
-- servidor e stream key próprios;
-- reconexão configurada individualmente;
-- métricas de bytes, frames, dropped frames, congestionamento e tempo de conexão.
+Windows CI uses OBS Studio/libobs 30.0.2 for ABI consistency with Ubuntu 24.04's libobs 30.x baseline. `prepare-obs-runtime.ps1` downloads the official OBS portable runtime and source headers, generates an MSVC import library from the official `obs.dll` exports and prepares a small SDK layout consumed by StorLive CMake.
 
-Assim uma falha de rede de um destino não obriga o app a derrubar os demais.
+`make-portable.ps1` keeps StorLive's own Qt deployment and embeds libobs plus only the capture/RTMP/encoder plugins used by the application. It validates that `storlive.exe` imports `obs.dll`, preventing a UI-only stub from being published as a production portable build.
 
-## Encoder
+At runtime `ObsEngine` resolves `data/libobs` and `obs-plugins/64bit` relative to `storlive.exe`, so double-click launching does not depend on the current working directory or on OBS Studio being installed.
 
-O backend enumera os encoders registrados no libobs e procura H.264. Em `Automático`, prioriza hardware (NVENC/AMF/QSV/VAAPI) e cai para x264. Em `Hardware`, exige um encoder de hardware. Em `Software`, prioriza x264. Para áudio, procura AAC e prioriza `ffmpeg_aac` quando disponível.
+## Linux
 
-## Captura
+Ubuntu/Debian builds use the system `libobs-dev` and `obs-plugins`. The `.deb` therefore depends on OBS plugins rather than embedding another copy of libobs.
 
-A UI oferece tipos comuns, enquanto `SceneManager` resolve o plugin disponível no sistema.
+## Source defaults
 
-### Windows
+Visual capture sources are given useful initial scene layouts: display/window/game sources fit the 1920×1080 canvas, and webcam starts as a 480×270 lower-right overlay. Audio-only sources are added without visual transforms.
 
-- `game_capture`
-- `window_capture`
-- `monitor_capture`
-- `dshow_input`
-- `wasapi_input_capture`
-- `wasapi_output_capture`
+## Security
 
-### Linux
-
-- PipeWire/Wayland quando os plugins correspondentes existem;
-- X11/XComposite como fallback;
-- V4L2 webcam;
-- PulseAudio/PipeWire para áudio.
-
-A cena `Gameplay` é ligada ao canal principal do libobs com `obs_set_output_source`.
-
-## Preview
-
-A composição já alimenta o pipeline do libobs, mas o preview ainda não é renderizado dentro do Qt Quick. Essa integração gráfica fica isolada para não misturar captura/transmissão com a UI.
-
-## Segredos
-
-Stream keys não pertencem a JSON do projeto nem ao Git. Nesta fase elas ficam somente em memória. Persistência futura deverá usar Credential Manager no Windows e Secret Service/libsecret no Linux.
+Legacy stream keys are not migrated. Credentials entered in the current application live in process memory only and are not written to repository files.

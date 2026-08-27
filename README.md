@@ -1,93 +1,90 @@
 # StorLive
 
-StorLive é um aplicativo desktop focado em **captura + multi-live**, para Windows e Linux. A proposta é manter somente o que interessa para transmissão: cenas/fontes, preview, áudio, encoder e vários destinos simultâneos.
+StorLive é um aplicativo desktop focado em **captura + multi-live** para Windows e Linux. A proposta é manter somente o que interessa para transmissão: fontes, preview, áudio, encoder e vários destinos RTMP simultâneos, sem carregar a interface completa do OBS Studio.
 
-## Objetivo
+## Recursos
 
-- Captura de jogo, janela, monitor e webcam.
-- Microfone e áudio do desktop.
-- Cenas e fontes em uma interface menor que o OBS Studio.
-- Encoder automático, hardware ou software.
-- NVIDIA NVENC, AMD AMF, Intel Quick Sync e x264 conforme disponibilidade do libobs/plugins.
-- YouTube, Twitch, Kick, Facebook e RTMP customizado.
-- Um mesmo perfil de encode compartilhado entre destinos compatíveis.
-- Falha/reconexão independente por destino.
-- Windows em pacote portable ZIP.
-- Linux em pacote `.deb` para Debian/Ubuntu.
+- Captura de jogo, janela, monitor/tela e webcam através dos plugins do libobs.
+- Microfone e áudio do computador.
+- Cena `Gameplay` com preview real da composição.
+- Propriedades reais das fontes OBS para selecionar janela, monitor, câmera e dispositivos de áudio.
+- Mostrar/ocultar fonte, mutar/desmutar fontes de áudio e remover fontes.
+- Encoder H.264 em modo **Automático**, **Hardware** ou **Software (x264)**.
+- NVIDIA NVENC, AMD AMF e Intel Quick Sync conforme GPU, driver e plugin disponíveis.
+- Perfil configurável: 1920×1080 ou 1280×720, 30/60 fps, bitrate de vídeo e áudio.
+- YouTube, Twitch, Kick, Facebook e RTMP personalizado.
+- Vários destinos simultâneos usando o mesmo encoder quando compartilham o mesmo perfil.
+- Reconexão independente e métricas por destino.
+- Windows em ZIP portable, sem instalador e sem exigir OBS Studio instalado.
+- Linux em `.deb` para Debian/Ubuntu.
 
-## Estado atual — 0.1.0-dev
+## Windows portable
 
-A base atual contém:
+O CI monta um runtime próprio baseado no **OBS Studio/libobs 30.0.2**, gera a import library MSVC a partir do `obs.dll` oficial e compila o StorLive com `STORLIVE_WITH_LIBOBS=ON`. O ZIP final inclui somente o runtime necessário para captura, áudio, encoders e RTMP; o Qt usado pela interface do StorLive permanece isolado do Qt distribuído pelo OBS.
 
-- projeto C++20 + Qt 6.4+/QML;
-- inicialização real de libobs no build Linux;
-- áudio 48 kHz e vídeo base 1080p60;
-- cena `Gameplay` real do libobs;
-- detecção/adicionamento das fontes de captura fornecidas pelos plugins instalados;
-- editor genérico das propriedades OBS da fonte (listas, bool, inteiro, decimal e texto), permitindo escolher janela/dispositivo quando o plugin expõe essa opção;
-- preview real via `video_output` do libobs convertido para BGRA e limitado na UI a até 960×540/~30 fps;
-- perfil de saída configurável pela UI: 1080p/720p, 30/60 fps, bitrate de vídeo e áudio;
-- encoder H.264 automático/hardware/software + AAC;
-- multi-output RTMP real no backend libobs;
-- compartilhamento do mesmo par de encoders entre destinos com perfil idêntico;
-- reconexão e métricas por destino;
-- configuração de servidor/stream key pela interface sem exibir a chave de volta;
-- empacotamento CPack `.deb`;
-- Windows portable ZIP;
-- GitHub Actions para Windows e Linux;
-- auditoria da aplicação legada em `docs/LEGACY_AUDIT.md`.
+Plugins principais empacotados:
 
-### Limites atuais
+- `obs-outputs` e `rtmp-services` para RTMP;
+- `obs-x264` e `obs-ffmpeg` para encode;
+- `obs-nvenc` e `obs-qsv11` quando presentes no runtime;
+- `win-capture` para jogo/janela/monitor;
+- `win-dshow` para webcam;
+- `win-wasapi` para microfone e áudio do computador.
 
-- Propriedades OBS especiais como botões, seletor de arquivos avançado, fontes e frame-rate ainda não possuem controles próprios; as propriedades comuns de seleção/configuração já são tratadas.
-- O CI Linux compila com libobs. O Windows portable ainda compila a UI/core sem libobs enquanto o SDK/runtime do OBS é integrado ao pacote MSVC; por isso o preview/captura/transmissão real ficam desativados nesse build Windows atual.
-- O preview usa cópia de frame para a UI nesta fase; a transmissão/encode continua usando o perfil selecionado.
-- Alterar o perfil durante uma transmissão ativa prepara a nova configuração para a próxima inicialização dos outputs.
-- Stream keys ficam somente em memória nesta fase; nenhuma chave do sistema legado foi importada.
+O empacotamento falha deliberadamente se `storlive.exe` não estiver realmente ligado a `obs.dll` ou se os plugins obrigatórios não estiverem presentes. Assim o CI não publica acidentalmente um ZIP apenas com a interface/stub.
 
-## Build rápido
+## Linux
 
-### Linux / Debian / Ubuntu
+No Ubuntu 24.04 o build usa `libobs-dev` + `obs-plugins` do sistema. O CI valida a ligação dinâmica com `libobs.so` antes de gerar o `.deb`.
+
+### Build local Linux
 
 ```bash
 sudo apt update
 sudo apt install -y build-essential cmake ninja-build pkg-config qt6-base-dev qt6-declarative-dev libobs-dev obs-plugins
-cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=ON
+cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-./build/storlive
+cd build && cpack -G DEB
 ```
 
-### Windows
+## Build local Windows
 
-Use Qt 6.4+ com toolchain MSVC e CMake/Ninja. O scaffold atual pode ser compilado sem libobs:
+Requisitos: Windows x64, Visual Studio 2022/MSVC, CMake/Ninja e Qt 6.8.
 
 ```powershell
-cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=OFF -DCMAKE_CXX_COMPILER=cl
-cmake --build build --config Release
+./packaging/windows/prepare-obs-runtime.ps1 -Version 30.0.2 -WorkDir .obs-runtime
+cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=ON -DSTORLIVE_OBS_ROOT="$pwd/.obs-runtime/sdk" -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl
+cmake --build build
 cmake --install build --prefix dist
-powershell -ExecutionPolicy Bypass -File packaging/windows/make-portable.ps1 -InstallDir dist -OutputDir artifacts
+./packaging/windows/make-portable.ps1 -InstallDir dist -OutputDir artifacts -ObsRuntimeRoot .obs-runtime/runtime
 ```
 
-Quando um bundle/SDK compatível do OBS/libobs for integrado ao Windows, o CMake já aceita `STORLIVE_OBS_ROOT`.
+## Releases
+
+Cada tag `v*` executa os builds Linux e Windows novamente. Somente depois dos dois jobs passarem o GitHub Actions cria a Release com:
+
+- `StorLive-Windows-x64-portable.zip`;
+- pacote `.deb` Linux;
+- `SHA256SUMS.txt`.
 
 ## Organização
 
 ```text
 src/app              inicialização do aplicativo
-src/core/obs         engine, cenas, fontes e preview libobs
-src/core/streaming   perfis, destinos e multi-output
+src/core/obs         engine, cena, fontes e preview libobs
+src/core/streaming   perfis, destinos, encoders e multi-output
 src/core             controller da aplicação
 resources/qml        interface Qt Quick
-packaging/windows    portable ZIP
-packaging/linux      metadados de pacote
-docs                 arquitetura e migração
-.github/workflows    builds Windows/Linux
+packaging/windows    runtime OBS e portable ZIP
+packaging/linux      metadados do pacote Debian
+docs                 arquitetura e auditoria da base legada
+.github/workflows    build, validação e release
 ```
 
 ## Segurança
 
-Chaves de transmissão do sistema antigo **não são importadas nem commitadas**. A persistência futura deverá usar o cofre nativo do sistema operacional.
+Nenhuma chave de transmissão do sistema legado é importada ou commitada. As stream keys informadas na interface permanecem apenas em memória nesta versão e não são exibidas de volta pela UI.
 
 ## Licença
 
-GPL-2.0-or-later, compatível com a integração direta com libobs. Veja `LICENSE`.
+StorLive é GPL-2.0-or-later, compatível com a integração direta com libobs/OBS Studio. O portable inclui aviso de terceiros e referência ao código-fonte do OBS Project. Veja `LICENSE`.

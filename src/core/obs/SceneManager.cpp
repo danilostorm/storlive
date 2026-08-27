@@ -26,6 +26,29 @@ QVariant valueForFormat(obs_data_t *settings, const char *name, const QString &f
         return obs_data_get_bool(settings, name);
     return QString::fromUtf8(obs_data_get_string(settings, name));
 }
+
+void applyDefaultLayout(obs_sceneitem_t *item, const QString &kind)
+{
+    if (!item)
+        return;
+
+    if (kind == QStringLiteral("game") || kind == QStringLiteral("window") || kind == QStringLiteral("display")) {
+        vec2 pos {0.0f, 0.0f};
+        vec2 bounds {1920.0f, 1080.0f};
+        obs_sceneitem_set_pos(item, &pos);
+        obs_sceneitem_set_bounds_type(item, OBS_BOUNDS_SCALE_INNER);
+        obs_sceneitem_set_bounds(item, &bounds);
+        return;
+    }
+
+    if (kind == QStringLiteral("webcam")) {
+        vec2 pos {1420.0f, 790.0f};
+        vec2 bounds {480.0f, 270.0f};
+        obs_sceneitem_set_pos(item, &pos);
+        obs_sceneitem_set_bounds_type(item, OBS_BOUNDS_SCALE_INNER);
+        obs_sceneitem_set_bounds(item, &bounds);
+    }
+}
 #endif
 }
 
@@ -234,6 +257,7 @@ bool SceneManager::addSource(const QString &kind, QString *createdName, QString 
         return false;
     }
 
+    applyDefaultLayout(item, kind);
     m_sourceNames.append(name);
     if (createdName)
         *createdName = name;

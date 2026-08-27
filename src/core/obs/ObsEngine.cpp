@@ -1,6 +1,7 @@
 #include "ObsEngine.h"
 
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
@@ -73,6 +74,13 @@ bool ObsEngine::initialize()
         return false;
     }
 
+#ifdef Q_OS_WIN
+    const QDir appDir(QCoreApplication::applicationDirPath());
+    const QByteArray libobsData = appDir.filePath(QStringLiteral("data/libobs")).toUtf8();
+    if (QFileInfo::exists(QString::fromUtf8(libobsData)))
+        obs_add_data_path(libobsData.constData());
+#endif
+
     if (!resetAudioVideo()) {
         obs_shutdown();
         return false;
@@ -84,7 +92,9 @@ bool ObsEngine::initialize()
         obs_add_module_path(customBin.constData(), customData.constData());
 
 #ifdef Q_OS_WIN
-    obs_add_module_path("obs-plugins/64bit", "data/obs-plugins/%module%");
+    const QByteArray portableBin = appDir.filePath(QStringLiteral("obs-plugins/64bit")).toUtf8();
+    const QByteArray portableData = appDir.filePath(QStringLiteral("data/obs-plugins/%module%")).toUtf8();
+    obs_add_module_path(portableBin.constData(), portableData.constData());
 #else
     obs_add_module_path("/usr/lib/x86_64-linux-gnu/obs-plugins", "/usr/share/obs/obs-plugins/%module%");
     obs_add_module_path("/usr/lib/obs-plugins", "/usr/share/obs/obs-plugins/%module%");
@@ -98,7 +108,7 @@ bool ObsEngine::initialize()
                    .arg(QString::fromUtf8(obs_get_version_string()));
     return true;
 #else
-    m_status = QStringLiteral("Build sem libobs: interface/core disponíveis; captura e RTMP desativados");
+    m_status = QStringLiteral("Build sem libobs: captura e RTMP indisponíveis");
     return false;
 #endif
 }
