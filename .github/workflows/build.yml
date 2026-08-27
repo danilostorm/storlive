@@ -32,7 +32,7 @@ jobs:
       - name: Verify libobs linkage
         run: |
           ldd build/storlive | grep -E 'libobs\.so'
-      - name: Smoke test GUI startup
+      - name: Smoke test development build
         shell: bash
         run: |
           set +e
@@ -42,7 +42,7 @@ jobs:
           cat storlive-smoke.log || true
           find "$HOME/.local/share" -name storlive-startup.log -print -exec cat {} \; 2>/dev/null || true
           if [ "$code" -ne 124 ]; then
-            echo "StorLive exited during startup smoke test (exit=$code)" >&2
+            echo "StorLive exited during development startup smoke test (exit=$code)" >&2
             exit 1
           fi
       - name: Package deb
@@ -57,6 +57,25 @@ jobs:
           for dep in qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts qml6-module-qtquick-templates qml6-module-qtquick-window qml6-module-qtqml-workerscript obs-plugins; do
             printf '%s' "$deps" | grep -F "$dep" >/dev/null || { echo "Missing package dependency: $dep" >&2; exit 1; }
           done
+      - name: Smoke test installed deb without libobs-dev
+        shell: bash
+        run: |
+          pkg="$(find build -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$pkg"
+          sudo apt-get remove -y libobs-dev
+          sudo apt-get install -y "$pkg"
+          test ! -e /usr/lib/x86_64-linux-gnu/libobs-opengl.so
+          test -e /usr/lib/x86_64-linux-gnu/libobs-opengl.so.30
+          set +e
+          QT_QPA_PLATFORM=xcb xvfb-run -a timeout 8s /usr/bin/storlive >storlive-installed-smoke.log 2>&1
+          code=$?
+          set -e
+          cat storlive-installed-smoke.log || true
+          find "$HOME/.local/share" -name storlive-startup.log -print -exec cat {} \; 2>/dev/null || true
+          if [ "$code" -ne 124 ]; then
+            echo "Installed StorLive exited during startup smoke test (exit=$code)" >&2
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: StorLive-Linux-deb
@@ -122,12 +141,14 @@ jobs:
           }
           $imports = (& dumpbin.exe /nologo /imports dist/storlive.exe) -join "`n"
           if ($imports -notmatch '(?im)^\s*obs\.dll\s*$') { throw 'storlive.exe is not linked to obs.dll' }
-      - name: Smoke test portable startup
+      - name: Smoke test extracted portable startup
         shell: pwsh
         run: |
-          $exe = (Resolve-Path 'dist/storlive.exe').Path
-          $work = (Resolve-Path 'dist').Path
-          $process = Start-Process -FilePath $exe -WorkingDirectory $work -PassThru
+          $smokeDir = Join-Path $pwd 'portable-smoke'
+          Remove-Item $smokeDir -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -Path 'artifacts/StorLive-Windows-x64-portable.zip' -DestinationPath $smokeDir -Force
+          $exe = (Resolve-Path (Join-Path $smokeDir 'storlive.exe')).Path
+          $process = Start-Process -FilePath $exe -WorkingDirectory $env:TEMP -PassThru
           Start-Sleep -Seconds 5
           $process.Refresh()
           if ($process.HasExited) {
@@ -139,7 +160,7 @@ jobs:
             Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue |
               Where-Object { $_.Message -match 'storlive\.exe' } |
               Select-Object -First 5 -ExpandProperty Message | Write-Host
-            throw "StorLive exited during Windows startup smoke test (exit=$($process.ExitCode))"
+            throw "StorLive exited during extracted portable startup smoke test (exit=$($process.ExitCode))"
           }
           Stop-Process -Id $process.Id -Force
       - uses: actions/upload-artifact@v4
