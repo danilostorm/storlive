@@ -66,9 +66,12 @@ qt_add_executable(storlive
 
 set_source_files_properties(resources/qml/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.qml)
 
+# Keep the embedded QML URL stable across Qt 6.4+ and independent of QTP0001.
+# With URI StorLive and RESOURCE_PREFIX "/", Main.qml is always qrc:/StorLive/Main.qml.
 qt_add_qml_module(storlive
     URI StorLive
     VERSION 1.0
+    RESOURCE_PREFIX "/"
     QML_FILES
         resources/qml/Main.qml
 )
