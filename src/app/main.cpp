@@ -1,6 +1,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QUrl>
 
 #include "core/AppController.h"
 
@@ -14,10 +15,10 @@ int main(int argc, char *argv[])
     AppController controller;
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("controller"), &controller);
+    engine.load(QUrl(QStringLiteral("qrc:/qt/qml/StorLive/Main.qml")));
 
-    QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
-                     &app, [] { QCoreApplication::exit(-1); }, Qt::QueuedConnection);
+    if (engine.rootObjects().isEmpty())
+        return -1;
 
-    engine.loadFromModule(QStringLiteral("StorLive"), QStringLiteral("Main"));
     return app.exec();
 }

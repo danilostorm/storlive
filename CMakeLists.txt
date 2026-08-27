@@ -10,8 +10,8 @@ set(CMAKE_AUTOMOC ON)
 option(STORLIVE_WITH_LIBOBS "Build with libobs integration" ON)
 set(STORLIVE_OBS_ROOT "" CACHE PATH "Optional OBS/libobs root for Windows portable builds")
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Quick QuickControls2)
-qt_standard_project_setup(REQUIRES 6.5)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick QuickControls2)
+qt_standard_project_setup(REQUIRES 6.4)
 
 set(STORLIVE_HAS_LIBOBS OFF)
 
@@ -54,6 +54,8 @@ qt_add_executable(storlive
     src/core/streaming/MultiOutputManager.cpp
     src/core/streaming/MultiOutputManager.h
 )
+
+set_source_files_properties(resources/qml/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.qml)
 
 qt_add_qml_module(storlive
     URI StorLive

@@ -19,7 +19,7 @@ StorLive é um aplicativo desktop focado em **captura + multi-live**, para Windo
 
 Esta primeira base já contém:
 
-- projeto C++20 + Qt 6/QML;
+- projeto C++20 + Qt 6.4+/QML;
 - separação `UI -> Controller -> Core -> libobs`;
 - inicialização opcional de libobs;
 - modelo de cenas/fontes e destinos;
@@ -54,7 +54,7 @@ cmake --build build
 
 ### Windows
 
-Use Qt 6.5+ e CMake/Ninja. Para o build de interface sem libobs:
+Use Qt 6.4+ e CMake/Ninja. Para o build de interface sem libobs:
 
 ```powershell
 cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=OFF
