@@ -23,6 +23,20 @@ ApplicationWindow {
     }
 
     Dialog {
+        id: removeSourceDialog
+        modal: true
+        anchors.centerIn: parent
+        title: "Remover fonte"
+        standardButtons: Dialog.Yes | Dialog.No
+        property string sourceName: ""
+        onAccepted: controller.removeSource(sourceName)
+        Label {
+            text: "Remover ‘" + removeSourceDialog.sourceName + "’ da cena Gameplay?"
+            color: root.textPrimary
+        }
+    }
+
+    Dialog {
         id: destinationDialog
         modal: true
         anchors.centerIn: parent
@@ -270,7 +284,7 @@ ApplicationWindow {
             spacing: 10
 
             Rectangle {
-                Layout.preferredWidth: 245
+                Layout.preferredWidth: 280
                 Layout.fillHeight: true
                 radius: 10
                 color: root.panel
@@ -290,17 +304,60 @@ ApplicationWindow {
                     ListView {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        model: controller.sources
+                        model: controller.sourceItems
                         clip: true
                         spacing: 4
-                        delegate: ItemDelegate {
+                        delegate: Rectangle {
                             width: ListView.view.width
-                            height: 40
-                            text: modelData
-                            onClicked: sourceConfigDialog.openFor(modelData)
+                            height: 42
+                            radius: 6
+                            color: root.panel2
+                            opacity: modelData.visible ? 1.0 : 0.55
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 4
+                                anchors.rightMargin: 4
+                                spacing: 2
+                                ToolButton {
+                                    text: modelData.visible ? "●" : "○"
+                                    onClicked: controller.setSourceVisible(modelData.name, !modelData.visible)
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: modelData.visible ? "Ocultar" : "Mostrar"
+                                }
+                                Label {
+                                    text: modelData.name
+                                    color: root.textPrimary
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                ToolButton {
+                                    visible: modelData.hasAudio
+                                    checkable: true
+                                    checked: modelData.muted
+                                    text: "M"
+                                    onClicked: controller.setSourceMuted(modelData.name, checked)
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: checked ? "Desmutar áudio" : "Mutar áudio"
+                                }
+                                ToolButton {
+                                    text: "…"
+                                    onClicked: sourceConfigDialog.openFor(modelData.name)
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: "Propriedades"
+                                }
+                                ToolButton {
+                                    text: "×"
+                                    onClicked: {
+                                        removeSourceDialog.sourceName = modelData.name
+                                        removeSourceDialog.open()
+                                    }
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: "Remover fonte"
+                                }
+                            }
                         }
                     }
-                    Label { visible: controller.sources.length === 0; text: "Nenhuma fonte adicionada"; color: root.textMuted; font.pixelSize: 11 }
+                    Label { visible: controller.sourceItems.length === 0; text: "Nenhuma fonte adicionada"; color: root.textMuted; font.pixelSize: 11 }
                     Button { Layout.fillWidth: true; text: "+ Adicionar fonte"; onClicked: sourceDialog.open() }
                 }
             }

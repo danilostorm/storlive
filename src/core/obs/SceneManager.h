@@ -23,7 +23,11 @@ public:
 
     QVariantList sourceOptions() const;
     QStringList sourceNames() const { return m_sourceNames; }
+    QVariantList sourceItems() const;
     bool addSource(const QString &kind, QString *createdName = nullptr, QString *error = nullptr);
+    bool setSourceVisible(const QString &sourceName, bool visible, QString *error = nullptr);
+    bool setSourceMuted(const QString &sourceName, bool muted, QString *error = nullptr);
+    bool removeSource(const QString &sourceName, QString *error = nullptr);
     QVariantList sourceProperties(const QString &sourceName, QString *error = nullptr) const;
     bool setSourceProperty(const QString &sourceName,
                            const QString &propertyName,

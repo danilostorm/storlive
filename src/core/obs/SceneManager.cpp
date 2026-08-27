@@ -166,6 +166,39 @@ QVariantList SceneManager::sourceOptions() const
     return result;
 }
 
+QVariantList SceneManager::sourceItems() const
+{
+    QVariantList result;
+    result.reserve(m_sourceNames.size());
+
+    for (const QString &name : m_sourceNames) {
+        bool visible = true;
+        bool muted = false;
+        bool hasAudio = false;
+#ifdef STORLIVE_HAS_LIBOBS
+        if (m_scene) {
+            const QByteArray nameUtf8 = name.toUtf8();
+            if (obs_sceneitem_t *item = obs_scene_find_source(m_scene, nameUtf8.constData()))
+                visible = obs_sceneitem_visible(item);
+
+            if (obs_source_t *source = obs_get_source_by_name(nameUtf8.constData())) {
+                const uint32_t flags = obs_source_get_output_flags(source);
+                hasAudio = (flags & OBS_SOURCE_AUDIO) != 0;
+                muted = hasAudio && obs_source_muted(source);
+                obs_source_release(source);
+            }
+        }
+#endif
+        result.append(QVariantMap {
+            {QStringLiteral("name"), name},
+            {QStringLiteral("visible"), visible},
+            {QStringLiteral("muted"), muted},
+            {QStringLiteral("hasAudio"), hasAudio}
+        });
+    }
+    return result;
+}
+
 bool SceneManager::addSource(const QString &kind, QString *createdName, QString *error)
 {
 #ifdef STORLIVE_HAS_LIBOBS
@@ -208,6 +241,93 @@ bool SceneManager::addSource(const QString &kind, QString *createdName, QString 
 #else
     Q_UNUSED(kind)
     Q_UNUSED(createdName)
+    if (error)
+        *error = QStringLiteral("Build sem libobs");
+    return false;
+#endif
+}
+
+bool SceneManager::setSourceVisible(const QString &sourceName, bool visible, QString *error)
+{
+#ifdef STORLIVE_HAS_LIBOBS
+    if (!m_scene) {
+        if (error)
+            *error = QStringLiteral("Cena Gameplay não está inicializada");
+        return false;
+    }
+
+    const QByteArray nameUtf8 = sourceName.toUtf8();
+    obs_sceneitem_t *item = obs_scene_find_source(m_scene, nameUtf8.constData());
+    if (!item) {
+        if (error)
+            *error = QStringLiteral("Fonte não encontrada na cena: %1").arg(sourceName);
+        return false;
+    }
+
+    obs_sceneitem_set_visible(item, visible);
+    return true;
+#else
+    Q_UNUSED(sourceName)
+    Q_UNUSED(visible)
+    if (error)
+        *error = QStringLiteral("Build sem libobs");
+    return false;
+#endif
+}
+
+bool SceneManager::setSourceMuted(const QString &sourceName, bool muted, QString *error)
+{
+#ifdef STORLIVE_HAS_LIBOBS
+    const QByteArray nameUtf8 = sourceName.toUtf8();
+    obs_source_t *source = obs_get_source_by_name(nameUtf8.constData());
+    if (!source) {
+        if (error)
+            *error = QStringLiteral("Fonte não encontrada: %1").arg(sourceName);
+        return false;
+    }
+
+    const bool hasAudio = (obs_source_get_output_flags(source) & OBS_SOURCE_AUDIO) != 0;
+    if (!hasAudio) {
+        obs_source_release(source);
+        if (error)
+            *error = QStringLiteral("Esta fonte não possui áudio");
+        return false;
+    }
+
+    obs_source_set_muted(source, muted);
+    obs_source_release(source);
+    return true;
+#else
+    Q_UNUSED(sourceName)
+    Q_UNUSED(muted)
+    if (error)
+        *error = QStringLiteral("Build sem libobs");
+    return false;
+#endif
+}
+
+bool SceneManager::removeSource(const QString &sourceName, QString *error)
+{
+#ifdef STORLIVE_HAS_LIBOBS
+    if (!m_scene) {
+        if (error)
+            *error = QStringLiteral("Cena Gameplay não está inicializada");
+        return false;
+    }
+
+    const QByteArray nameUtf8 = sourceName.toUtf8();
+    obs_sceneitem_t *item = obs_scene_find_source(m_scene, nameUtf8.constData());
+    if (!item) {
+        if (error)
+            *error = QStringLiteral("Fonte não encontrada na cena: %1").arg(sourceName);
+        return false;
+    }
+
+    obs_sceneitem_remove(item);
+    m_sourceNames.removeAll(sourceName);
+    return true;
+#else
+    Q_UNUSED(sourceName)
     if (error)
         *error = QStringLiteral("Build sem libobs");
     return false;

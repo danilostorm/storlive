@@ -19,6 +19,7 @@ class AppController final : public QObject
     Q_PROPERTY(QVariantList encodeGroups READ encodeGroups NOTIFY destinationsChanged)
     Q_PROPERTY(QVariantList sourceOptions READ sourceOptions NOTIFY sourcesChanged)
     Q_PROPERTY(QStringList sources READ sources NOTIFY sourcesChanged)
+    Q_PROPERTY(QVariantList sourceItems READ sourceItems NOTIFY sourcesChanged)
     Q_PROPERTY(QStringList encoderOptions READ encoderOptions CONSTANT)
     Q_PROPERTY(QString encoderMode READ encoderMode WRITE setEncoderMode NOTIFY encoderModeChanged)
     Q_PROPERTY(QVariantMap streamProfile READ streamProfile NOTIFY streamProfileChanged)
@@ -35,6 +36,7 @@ public:
     QVariantList encodeGroups() const;
     QVariantList sourceOptions() const { return m_scenes.sourceOptions(); }
     QStringList sources() const { return m_scenes.sourceNames(); }
+    QVariantList sourceItems() const { return m_scenes.sourceItems(); }
     QStringList encoderOptions() const;
     QString encoderMode() const { return m_encoderMode; }
     QVariantMap streamProfile() const;
@@ -54,6 +56,9 @@ public:
                                              int videoBitrateKbps,
                                              int audioBitrateKbps);
     Q_INVOKABLE QVariantMap addSource(const QString &kind);
+    Q_INVOKABLE void setSourceVisible(const QString &sourceName, bool visible);
+    Q_INVOKABLE void setSourceMuted(const QString &sourceName, bool muted);
+    Q_INVOKABLE void removeSource(const QString &sourceName);
     Q_INVOKABLE QVariantList sourceProperties(const QString &sourceName) const;
     Q_INVOKABLE QVariantMap setSourceProperty(const QString &sourceName,
                                                const QString &propertyName,
@@ -75,6 +80,7 @@ private slots:
 
 private:
     void addPreset(QString id, QString name, QString server = {});
+    void setSourceActionStatus(bool ok, const QString &successMessage, const QString &error);
 
     ObsEngine m_obs;
     SceneManager m_scenes;

@@ -188,6 +188,41 @@ QVariantMap AppController::addSource(const QString &kind)
     };
 }
 
+void AppController::setSourceActionStatus(bool ok, const QString &successMessage, const QString &error)
+{
+    m_activityStatus = ok ? successMessage : error;
+    if (ok)
+        emit sourcesChanged();
+    emit statusChanged();
+}
+
+void AppController::setSourceVisible(const QString &sourceName, bool visible)
+{
+    QString error;
+    const bool ok = m_scenes.setSourceVisible(sourceName, visible, &error);
+    setSourceActionStatus(ok,
+                          visible ? QStringLiteral("%1 visível").arg(sourceName)
+                                  : QStringLiteral("%1 ocultada").arg(sourceName),
+                          error);
+}
+
+void AppController::setSourceMuted(const QString &sourceName, bool muted)
+{
+    QString error;
+    const bool ok = m_scenes.setSourceMuted(sourceName, muted, &error);
+    setSourceActionStatus(ok,
+                          muted ? QStringLiteral("Áudio de %1 mutado").arg(sourceName)
+                                : QStringLiteral("Áudio de %1 ativado").arg(sourceName),
+                          error);
+}
+
+void AppController::removeSource(const QString &sourceName)
+{
+    QString error;
+    const bool ok = m_scenes.removeSource(sourceName, &error);
+    setSourceActionStatus(ok, QStringLiteral("%1 removida da cena").arg(sourceName), error);
+}
+
 QVariantList AppController::sourceProperties(const QString &sourceName) const
 {
     return m_scenes.sourceProperties(sourceName);
