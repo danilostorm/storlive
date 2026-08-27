@@ -9,7 +9,7 @@ if (-not (Test-Path $InstallDir)) {
     throw "Install directory not found: $InstallDir"
 }
 
-$exe = Join-Path $InstallDir "bin/storlive.exe"
+$exe = Join-Path $InstallDir "storlive.exe"
 if (-not (Test-Path $exe)) {
     throw "StorLive executable not found: $exe"
 }
