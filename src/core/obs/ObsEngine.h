@@ -15,6 +15,8 @@ public:
     QString status() const { return m_status; }
 
 private:
+    bool resetAudioVideo();
+
     bool m_initialized {false};
     QString m_status {QStringLiteral("libobs ainda não inicializado")};
 };

@@ -17,6 +17,53 @@ ApplicationWindow {
     property color textPrimary: "#f4f5f7"
     property color textMuted: "#9ea6b4"
 
+    Dialog {
+        id: destinationDialog
+        modal: true
+        anchors.centerIn: parent
+        width: 520
+        title: "Configurar destino"
+        property int destinationIndex: -1
+        standardButtons: Dialog.Save | Dialog.Cancel
+        onAccepted: controller.setDestinationCredentials(destinationIndex, serverField.text, keyField.text)
+        ColumnLayout {
+            width: parent.width
+            Label { id: destinationLabel; color: root.textPrimary; font.bold: true }
+            TextField { id: serverField; Layout.fillWidth: true; placeholderText: "Servidor RTMP / RTMPS" }
+            TextField { id: keyField; Layout.fillWidth: true; placeholderText: "Stream key (deixe vazio para manter a atual)"; echoMode: TextInput.Password }
+            Label { text: "A chave não é exibida de volta pela interface."; color: root.textMuted; font.pixelSize: 11 }
+        }
+    }
+
+    Dialog {
+        id: sourceDialog
+        modal: true
+        anchors.centerIn: parent
+        width: 500
+        height: 470
+        title: "Adicionar fonte"
+        standardButtons: Dialog.Close
+        ColumnLayout {
+            anchors.fill: parent
+            Label { text: "Fontes detectadas nos plugins do libobs"; color: root.textMuted }
+            ListView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                model: controller.sourceOptions
+                delegate: ItemDelegate {
+                    width: ListView.view.width
+                    enabled: modelData.available
+                    onClicked: { controller.addSource(modelData.kind); sourceDialog.close() }
+                    contentItem: RowLayout {
+                        Label { text: modelData.label; color: parent.parent.enabled ? root.textPrimary : "#676d79"; Layout.fillWidth: true }
+                        Label { text: modelData.backend; color: root.textMuted; font.pixelSize: 11 }
+                    }
+                }
+            }
+        }
+    }
+
     header: ToolBar {
         background: Rectangle { color: "#151820" }
         RowLayout {
@@ -41,7 +88,7 @@ ApplicationWindow {
             spacing: 10
 
             Rectangle {
-                Layout.preferredWidth: 235
+                Layout.preferredWidth: 245
                 Layout.fillHeight: true
                 radius: 10
                 color: root.panel
@@ -50,29 +97,29 @@ ApplicationWindow {
                     anchors.margins: 14
                     spacing: 10
                     Label { text: "CENAS"; color: root.textMuted; font.bold: true }
-                    ListView {
+                    Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 125
-                        model: ["Gameplay", "Câmera", "Intervalo"]
-                        delegate: ItemDelegate {
-                            width: ListView.view.width
-                            text: modelData
-                            highlighted: index === 0
-                        }
+                        Layout.preferredHeight: 42
+                        radius: 6
+                        color: root.panel2
+                        Label { anchors.centerIn: parent; text: "Gameplay"; color: root.textPrimary; font.bold: true }
                     }
                     Label { text: "FONTES"; color: root.textMuted; font.bold: true }
-                    Repeater {
-                        model: ["Jogo / janela", "Monitor", "Webcam", "Microfone", "Áudio desktop"]
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: controller.sources
+                        clip: true
                         delegate: Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 38
+                            width: ListView.view.width
+                            height: 40
                             radius: 6
                             color: root.panel2
                             Label { anchors.centerIn: parent; text: modelData; color: root.textPrimary }
                         }
                     }
-                    Item { Layout.fillHeight: true }
-                    Button { Layout.fillWidth: true; text: "+ Adicionar fonte"; enabled: false; ToolTip.text: "Será conectado aos source plugins do libobs" }
+                    Label { visible: controller.sources.length === 0; text: "Nenhuma fonte adicionada"; color: root.textMuted; font.pixelSize: 11 }
+                    Button { Layout.fillWidth: true; text: "+ Adicionar fonte"; onClicked: sourceDialog.open() }
                 }
             }
 
@@ -86,13 +133,13 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     spacing: 12
                     Label { text: "PREVIEW"; color: "#596172"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                    Label { text: "A saída gráfica do libobs será renderizada aqui"; color: root.textMuted; Layout.alignment: Qt.AlignHCenter }
-                    Label { text: "Captura: jogo • janela • monitor • webcam"; color: "#6e7686"; Layout.alignment: Qt.AlignHCenter }
+                    Label { text: "Cena Gameplay está conectada à saída do libobs"; color: root.textMuted; Layout.alignment: Qt.AlignHCenter }
+                    Label { text: "Renderização do preview na UI entra na próxima camada gráfica"; color: "#6e7686"; Layout.alignment: Qt.AlignHCenter }
                 }
             }
 
             Rectangle {
-                Layout.preferredWidth: 330
+                Layout.preferredWidth: 350
                 Layout.fillHeight: true
                 radius: 10
                 color: root.panel
@@ -106,7 +153,7 @@ ApplicationWindow {
                         model: controller.destinations
                         delegate: Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 68
+                            Layout.preferredHeight: 72
                             radius: 8
                             color: root.panel2
                             RowLayout {
@@ -122,7 +169,19 @@ ApplicationWindow {
                                     Label { text: modelData.name; color: root.textPrimary; font.bold: true }
                                     Label { text: modelData.hasKey ? "Chave configurada" : "Chave não configurada"; color: modelData.hasKey ? "#70d6a8" : root.textMuted; font.pixelSize: 11 }
                                 }
-                                Label { text: modelData.state; color: root.textMuted; font.pixelSize: 11 }
+                                ColumnLayout {
+                                    Label { text: modelData.state; color: modelData.state === "Ao vivo" ? "#70d6a8" : root.textMuted; font.pixelSize: 11 }
+                                    Button {
+                                        text: "Configurar"
+                                        onClicked: {
+                                            destinationDialog.destinationIndex = index
+                                            destinationLabel.text = modelData.name
+                                            serverField.text = modelData.server
+                                            keyField.text = ""
+                                            destinationDialog.open()
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -138,7 +197,7 @@ ApplicationWindow {
                                 currentIndex: controller.encoderOptions.indexOf(controller.encoderMode)
                                 onActivated: controller.encoderMode = currentText
                             }
-                            Label { text: "Perfis iguais serão agrupados para reutilizar o mesmo encode."; color: root.textMuted; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 11 }
+                            Label { text: "Perfis iguais reutilizam o mesmo encode H.264/AAC."; color: root.textMuted; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 11 }
                         }
                     }
                     Item { Layout.fillHeight: true }
@@ -148,7 +207,7 @@ ApplicationWindow {
 
         Rectangle {
             Layout.fillWidth: true
-            Layout.preferredHeight: 86
+            Layout.preferredHeight: 92
             radius: 10
             color: root.panel
             RowLayout {
@@ -157,25 +216,22 @@ ApplicationWindow {
                 spacing: 18
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Label { text: "ÁUDIO"; color: root.textMuted; font.bold: true }
-                    RowLayout {
-                        Label { text: "Mic"; color: root.textPrimary }
-                        ProgressBar { value: 0; Layout.preferredWidth: 160 }
-                        Label { text: "Desktop"; color: root.textPrimary }
-                        ProgressBar { value: 0; Layout.preferredWidth: 160 }
-                    }
+                    Label { text: "ÁUDIO / SAÍDA"; color: root.textMuted; font.bold: true }
+                    Label { text: controller.outputStats.length > 0 ? (controller.outputStats.length + " saída(s) monitorada(s)") : "Nenhuma transmissão ativa"; color: root.textPrimary }
+                    Label { text: "1080p60 • 48 kHz • reconexão independente"; color: root.textMuted; font.pixelSize: 11 }
                 }
                 ColumnLayout {
-                    Layout.preferredWidth: 420
+                    Layout.preferredWidth: 470
                     Label { text: controller.activityStatus; color: root.textMuted; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                     RowLayout {
                         Button { text: "Parar"; onClicked: controller.stopAll() }
                         Button {
                             text: "● INICIAR MULTI-LIVE"
                             highlighted: true
+                            enabled: controller.transmissionReady
                             onClicked: controller.startAll()
                             ToolTip.visible: hovered && !controller.transmissionReady
-                            ToolTip.text: "A UI/core já está pronta; o output RTMP libobs será ligado na próxima etapa."
+                            ToolTip.text: "O libobs precisa estar ativo com plugin RTMP e encoder H.264/AAC."
                         }
                     }
                 }

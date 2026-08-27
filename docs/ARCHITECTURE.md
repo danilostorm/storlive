@@ -9,8 +9,8 @@ Qt/QML UI
    |
 AppController
    |
-   +-- Scene/Source model
-   +-- Audio model
+   +-- SceneManager -> obs_scene_t -> fontes de captura
+   +-- Audio/Video 1080p60 / 48 kHz
    +-- Encoder selection
    +-- MultiOutputManager
              |
@@ -26,42 +26,52 @@ Cada destino recebe uma assinatura de perfil:
 
 `codec:widthxheight:fps:videoBitrate:audioBitrate`
 
-Destinos ativos com a mesma assinatura entram no mesmo grupo. O backend deve criar **um encoder de vídeo e um encoder de áudio por grupo** e compartilhar esses encoders entre os `obs_output_t` do grupo.
+Destinos ativos com a mesma assinatura entram no mesmo grupo. O backend cria **um encoder de vídeo e um encoder de áudio por grupo** e associa esses mesmos encoders a todos os `obs_output_t` daquele grupo.
 
 Se uma plataforma exigir outro bitrate/resolução/codec, ela recebe outro grupo.
 
-## Falhas independentes
+## Outputs
 
-Cada destino deverá manter seu próprio estado:
+Cada destino possui:
 
-- Parado
-- Conectando
-- Ao vivo
-- Reconectando
-- Erro
+- `rtmp_custom` service próprio;
+- `rtmp_output` próprio;
+- servidor e stream key próprios;
+- reconexão configurada individualmente;
+- métricas de bytes, frames, dropped frames, congestionamento e tempo de conexão.
 
-Uma falha em um `obs_output_t` não deve parar os demais outputs.
+Assim uma falha de rede de um destino não obriga o app a derrubar os demais.
+
+## Encoder
+
+O backend enumera os encoders registrados no libobs e procura H.264. Em `Automático`, prioriza hardware (NVENC/AMF/QSV/VAAPI) e cai para x264. Em `Hardware`, exige um encoder de hardware. Em `Software`, prioriza x264. Para áudio, procura AAC e prioriza `ffmpeg_aac` quando disponível.
 
 ## Captura
 
-A API de UI será comum, mas a implementação das fontes será específica por plataforma:
+A UI oferece tipos comuns, enquanto `SceneManager` resolve o plugin disponível no sistema.
 
 ### Windows
 
-- Game Capture
-- Window Capture
-- Display Capture
-- WASAPI input/output
-- DirectShow/webcam via plugin OBS
+- `game_capture`
+- `window_capture`
+- `monitor_capture`
+- `dshow_input`
+- `wasapi_input_capture`
+- `wasapi_output_capture`
 
 ### Linux
 
-- PipeWire/Wayland
-- X11 quando disponível
-- V4L2 webcam
-- PipeWire/PulseAudio
-- captura de jogo conforme plugins disponíveis
+- PipeWire/Wayland quando os plugins correspondentes existem;
+- X11/XComposite como fallback;
+- V4L2 webcam;
+- PulseAudio/PipeWire para áudio.
+
+A cena `Gameplay` é ligada ao canal principal do libobs com `obs_set_output_source`.
+
+## Preview
+
+A composição já alimenta o pipeline do libobs, mas o preview ainda não é renderizado dentro do Qt Quick. Essa integração gráfica fica isolada para não misturar captura/transmissão com a UI.
 
 ## Segredos
 
-Stream keys não pertencem a JSON do projeto nem ao Git. Persistência deverá usar Credential Manager no Windows e Secret Service/libsecret no Linux.
+Stream keys não pertencem a JSON do projeto nem ao Git. Nesta fase elas ficam somente em memória. Persistência futura deverá usar Credential Manager no Windows e Secret Service/libsecret no Linux.

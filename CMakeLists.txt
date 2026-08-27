@@ -50,6 +50,8 @@ qt_add_executable(storlive
     src/core/AppController.h
     src/core/obs/ObsEngine.cpp
     src/core/obs/ObsEngine.h
+    src/core/obs/SceneManager.cpp
+    src/core/obs/SceneManager.h
     src/core/streaming/StreamDestination.h
     src/core/streaming/MultiOutputManager.cpp
     src/core/streaming/MultiOutputManager.h
@@ -102,5 +104,8 @@ set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_GENERATOR "DEB")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "danilostorm")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+if(STORLIVE_HAS_LIBOBS)
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "obs-plugins")
+endif()
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 include(CPack)

@@ -1,5 +1,6 @@
 #include "AppController.h"
 
+#include <QVariantMap>
 #include <QUuid>
 #include <utility>
 
@@ -13,8 +14,27 @@ AppController::AppController(QObject *parent)
     addPreset(QStringLiteral("facebook"), QStringLiteral("Facebook"));
     addPreset(QStringLiteral("custom"), QStringLiteral("RTMP personalizado"));
 
-    m_obs.initialize();
+    if (m_obs.initialize()) {
+        QString sceneError;
+        if (!m_scenes.initialize(&sceneError))
+            m_activityStatus = sceneError;
+        else
+            m_activityStatus = m_multiOutput.outputBackendReady()
+                ? QStringLiteral("Engine pronta • configure fontes e destinos")
+                : QStringLiteral("libobs ativo, mas faltam plugins RTMP/encoders");
+    }
+
+    m_statsTimer.setInterval(1000);
+    connect(&m_statsTimer, &QTimer::timeout, this, &AppController::refreshStats);
+    m_statsTimer.start();
     emit statusChanged();
+}
+
+AppController::~AppController()
+{
+    m_statsTimer.stop();
+    m_multiOutput.stop();
+    m_scenes.shutdown();
 }
 
 void AppController::addPreset(QString id, QString name, QString server)
@@ -74,8 +94,10 @@ void AppController::setDestinationCredentials(int index, const QString &server, 
 {
     if (index < 0 || index >= m_destinations.size())
         return;
-    m_destinations[index].server = server.trimmed();
-    m_destinations[index].streamKey = streamKey.trimmed();
+    if (!server.trimmed().isEmpty())
+        m_destinations[index].server = server.trimmed();
+    if (!streamKey.trimmed().isEmpty())
+        m_destinations[index].streamKey = streamKey.trimmed();
     emit destinationsChanged();
 }
 
@@ -91,24 +113,78 @@ void AppController::addCustomDestination(const QString &name, const QString &ser
     emit destinationsChanged();
 }
 
+void AppController::addSource(const QString &kind)
+{
+    QString error;
+    if (m_scenes.addSource(kind, &error)) {
+        m_activityStatus = QStringLiteral("Fonte adicionada à cena Gameplay");
+        emit sourcesChanged();
+    } else {
+        m_activityStatus = error;
+    }
+    emit statusChanged();
+}
+
 void AppController::startAll()
 {
-    const QString validation = m_multiOutput.validate(m_destinations);
-    if (!validation.isEmpty()) {
-        m_activityStatus = validation;
-        emit statusChanged();
-        return;
+    QString resultMessage;
+    const bool started = m_multiOutput.start(m_destinations, m_encoderMode, &resultMessage);
+    if (started) {
+        m_activityStatus = resultMessage.isEmpty()
+            ? QStringLiteral("Multi-live iniciada")
+            : QStringLiteral("Multi-live iniciada com avisos: %1").arg(resultMessage);
+    } else {
+        m_activityStatus = resultMessage;
     }
-
-    if (!transmissionReady()) {
-        m_activityStatus = QStringLiteral("Destinos e perfis estão válidos. Falta conectar o MultiOutputManager aos obs_output_t antes de liberar a transmissão.");
-        emit statusChanged();
-        return;
-    }
+    emit destinationsChanged();
+    emit statusChanged();
+    refreshStats();
 }
 
 void AppController::stopAll()
 {
+    m_multiOutput.stop();
+    for (auto &destination : m_destinations) {
+        if (destination.enabled)
+            destination.state = QStringLiteral("Parado");
+    }
+    m_outputStats.clear();
     m_activityStatus = QStringLiteral("Transmissões paradas");
+    emit destinationsChanged();
+    emit statsChanged();
     emit statusChanged();
+}
+
+void AppController::refreshStats()
+{
+    const QVariantList newStats = m_multiOutput.stats();
+    if (newStats != m_outputStats) {
+        m_outputStats = newStats;
+        emit statsChanged();
+    }
+
+    bool stateChanged = false;
+    for (const QVariant &entry : m_outputStats) {
+        const QVariantMap stat = entry.toMap();
+        const QString id = stat.value(QStringLiteral("id")).toString();
+        for (auto &destination : m_destinations) {
+            if (destination.id != id)
+                continue;
+            QString nextState;
+            if (stat.value(QStringLiteral("reconnecting")).toBool())
+                nextState = QStringLiteral("Reconectando");
+            else if (stat.value(QStringLiteral("active")).toBool())
+                nextState = QStringLiteral("Ao vivo");
+            else if (!stat.value(QStringLiteral("lastError")).toString().isEmpty())
+                nextState = QStringLiteral("Erro");
+            else
+                nextState = QStringLiteral("Parado");
+            if (destination.state != nextState) {
+                destination.state = nextState;
+                stateChanged = true;
+            }
+        }
+    }
+    if (stateChanged)
+        emit destinationsChanged();
 }

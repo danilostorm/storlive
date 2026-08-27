@@ -17,20 +17,29 @@ StorLive é um aplicativo desktop focado em **captura + multi-live**, para Windo
 
 ## Estado atual — 0.1.0-dev
 
-Esta primeira base já contém:
+A base atual contém:
 
 - projeto C++20 + Qt 6.4+/QML;
-- separação `UI -> Controller -> Core -> libobs`;
-- inicialização opcional de libobs;
-- modelo de cenas/fontes e destinos;
-- agrupamento de destinos por perfil de encode para permitir encode compartilhado;
-- interface desktop inicial;
+- inicialização real de libobs no build Linux;
+- áudio 48 kHz e vídeo base 1080p60;
+- cena `Gameplay` real do libobs;
+- detecção/adicionamento das fontes de captura fornecidas pelos plugins instalados;
+- encoder H.264 automático/hardware/software + AAC;
+- multi-output RTMP real no backend libobs;
+- compartilhamento do mesmo par de encoders entre destinos com perfil idêntico;
+- reconexão e métricas por destino;
+- configuração de servidor/stream key pela interface sem exibir a chave de volta;
 - empacotamento CPack `.deb`;
 - script para Windows portable;
 - GitHub Actions para Windows e Linux;
 - auditoria da aplicação legada em `docs/LEGACY_AUDIT.md`.
 
-O pipeline RTMP e as fontes reais de captura estão sendo implementados em etapas separadas para evitar transformar o novo código em outro monólito.
+### Limites atuais
+
+- O preview ainda é um placeholder no Qt Quick; a cena já alimenta a saída do libobs, mas falta renderizá-la dentro da janela.
+- Fontes que exigem escolher uma janela/dispositivo específico ainda precisam da camada de propriedades/configuração.
+- O CI Linux compila com libobs. O Windows portable ainda compila a UI/core sem libobs enquanto o SDK/runtime do OBS é integrado ao pacote MSVC.
+- Stream keys ficam somente em memória nesta fase; nenhuma chave do sistema legado foi importada.
 
 ## Build rápido
 
@@ -38,38 +47,30 @@ O pipeline RTMP e as fontes reais de captura estão sendo implementados em etapa
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake ninja-build qt6-base-dev qt6-declarative-dev
-cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=OFF
+sudo apt install -y build-essential cmake ninja-build pkg-config qt6-base-dev qt6-declarative-dev libobs-dev obs-plugins
+cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=ON
 cmake --build build
 ./build/storlive
 ```
 
-Para compilar com libobs instalado:
-
-```bash
-sudo apt install -y libobs-dev obs-studio
-cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=ON
-cmake --build build
-```
-
 ### Windows
 
-Use Qt 6.4+ e CMake/Ninja. Para o build de interface sem libobs:
+Use Qt 6.4+ com toolchain MSVC e CMake/Ninja. O scaffold atual pode ser compilado sem libobs:
 
 ```powershell
-cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=OFF
+cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=OFF -DCMAKE_CXX_COMPILER=cl
 cmake --build build --config Release
 cmake --install build --prefix dist
 powershell -ExecutionPolicy Bypass -File packaging/windows/make-portable.ps1 -InstallDir dist -OutputDir artifacts
 ```
 
-Quando um bundle do OBS/libobs for usado no Windows, informe `STORLIVE_OBS_ROOT` no CMake.
+Quando um bundle/SDK compatível do OBS/libobs for integrado ao Windows, o CMake já aceita `STORLIVE_OBS_ROOT`.
 
 ## Organização
 
 ```text
 src/app              inicialização do aplicativo
-src/core/obs         integração libobs
+src/core/obs         engine, cenas e fontes libobs
 src/core/streaming   perfis, destinos e multi-output
 src/core             controller da aplicação
 resources/qml        interface Qt Quick
@@ -81,7 +82,7 @@ docs                 arquitetura e migração
 
 ## Segurança
 
-Chaves de transmissão do sistema antigo **não são importadas nem commitadas**. O novo projeto deverá armazenar segredos no cofre nativo do sistema operacional antes de oferecer persistência de stream keys.
+Chaves de transmissão do sistema antigo **não são importadas nem commitadas**. A persistência futura deverá usar o cofre nativo do sistema operacional.
 
 ## Licença
 
