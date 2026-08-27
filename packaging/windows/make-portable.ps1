@@ -14,8 +14,41 @@ if (-not (Test-Path $exe)) { throw "StorLive executable not found: $exe" }
 
 $windeployqt = Get-Command windeployqt.exe -ErrorAction SilentlyContinue
 if ($windeployqt) {
-    & $windeployqt.Source --qmldir (Join-Path $PSScriptRoot "../../resources/qml") --release $exe
+    & $windeployqt.Source --qmldir (Join-Path $PSScriptRoot "../../resources/qml") --release --compiler-runtime $exe
     if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+}
+
+# windeployqt does not reliably copy the MSVC runtime on every CI image.
+# Bundle the exact x64 runtime DLLs explicitly so the portable ZIP starts on a clean Windows install.
+$crtFiles = @(
+    "MSVCP140.dll",
+    "MSVCP140_1.dll",
+    "MSVCP140_2.dll",
+    "VCRUNTIME140.dll",
+    "VCRUNTIME140_1.dll"
+)
+
+$crtSearchRoots = @()
+if ($env:VCToolsRedistDir) { $crtSearchRoots += $env:VCToolsRedistDir }
+if ($env:SystemRoot) { $crtSearchRoots += (Join-Path $env:SystemRoot "System32") }
+
+foreach ($crt in $crtFiles) {
+    if (Test-Path (Join-Path $install $crt)) { continue }
+
+    $found = $null
+    foreach ($root in $crtSearchRoots) {
+        if (-not (Test-Path $root)) { continue }
+        $candidate = Get-ChildItem -Path $root -Recurse -File -Filter $crt -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match 'x64|System32' } |
+            Select-Object -First 1
+        if ($candidate) {
+            $found = $candidate.FullName
+            break
+        }
+    }
+
+    if (-not $found) { throw "Unable to locate required MSVC runtime DLL: $crt" }
+    Copy-Item $found -Destination (Join-Path $install $crt) -Force
 }
 
 if ($ObsRuntimeRoot) {
@@ -79,6 +112,26 @@ if ($ObsRuntimeRoot) {
     }
 }
 
+# Force Qt to resolve plugins and QML imports relative to the portable directory.
+$qtConf = @"
+[Paths]
+Prefix=.
+Plugins=.
+Qml2Imports=qml
+Translations=translations
+"@
+Set-Content -Path (Join-Path $install "qt.conf") -Value $qtConf -Encoding ASCII
+
+$debugLauncher = @"
+@echo off
+set QT_DEBUG_PLUGINS=1
+set QML_IMPORT_TRACE=1
+storlive.exe > storlive-debug.log 2>&1
+type storlive-debug.log
+pause
+"@
+Set-Content -Path (Join-Path $install "Run-StorLive-Debug.cmd") -Value $debugLauncher -Encoding ASCII
+
 $licenseSource = Join-Path $PSScriptRoot "../../LICENSE"
 if (Test-Path $licenseSource) { Copy-Item $licenseSource -Destination (Join-Path $install "LICENSE.txt") -Force }
 
@@ -98,6 +151,12 @@ Compress-Archive -Path (Join-Path $install "*") -DestinationPath $zip -Compressi
 
 $requiredPortable = @(
     "storlive.exe",
+    "qt.conf",
+    "MSVCP140.dll",
+    "MSVCP140_1.dll",
+    "MSVCP140_2.dll",
+    "VCRUNTIME140.dll",
+    "VCRUNTIME140_1.dll",
     "obs.dll",
     "libobs-d3d11.dll",
     "obs-plugins/64bit/obs-outputs.dll",
