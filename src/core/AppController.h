@@ -34,9 +34,9 @@ public:
 
     QVariantList destinations() const;
     QVariantList encodeGroups() const;
-    QVariantList sourceOptions() const { return m_scenes.sourceOptions(); }
+    QVariantList sourceOptions() const { return m_obs.isInitialized() ? m_scenes.sourceOptions() : QVariantList {}; }
     QStringList sources() const { return m_scenes.sourceNames(); }
-    QVariantList sourceItems() const { return m_scenes.sourceItems(); }
+    QVariantList sourceItems() const { return m_obs.isInitialized() ? m_scenes.sourceItems() : QVariantList {}; }
     QStringList encoderOptions() const;
     QString encoderMode() const { return m_encoderMode; }
     QVariantMap streamProfile() const;
