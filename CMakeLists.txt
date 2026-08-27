@@ -86,12 +86,11 @@ endif()
 
 if(WIN32)
     set_target_properties(storlive PROPERTIES WIN32_EXECUTABLE TRUE)
+    install(TARGETS storlive RUNTIME DESTINATION . BUNDLE DESTINATION .)
+else()
+    install(TARGETS storlive RUNTIME DESTINATION bin BUNDLE DESTINATION .)
+    install(FILES packaging/linux/storlive.desktop DESTINATION share/applications)
 endif()
-
-install(TARGETS storlive
-    RUNTIME DESTINATION bin
-    BUNDLE DESTINATION .
-)
 
 set(CPACK_PACKAGE_NAME "storlive")
 set(CPACK_PACKAGE_VENDOR "StorLive")
