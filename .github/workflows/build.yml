@@ -34,11 +34,16 @@ jobs:
       - uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.*'
+          arch: 'win64_msvc2022_64'
           modules: 'qtshadertools'
           cache: true
+      - name: Enable MSVC toolchain
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - name: Configure
         shell: pwsh
-        run: cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=OFF -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Ninja -DSTORLIVE_WITH_LIBOBS=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=cl
       - name: Build
         shell: pwsh
         run: cmake --build build
