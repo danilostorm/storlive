@@ -228,9 +228,30 @@ bool ObsEngine::initialize()
 
 #ifdef Q_OS_WIN
     const QDir appDir(QCoreApplication::applicationDirPath());
-    const QByteArray libobsData = appDir.filePath(QStringLiteral("data/libobs")).toUtf8();
-    if (QFileInfo::exists(QString::fromUtf8(libobsData)))
-        obs_add_data_path(libobsData.constData());
+    QString libobsDataPath = QDir::cleanPath(appDir.filePath(QStringLiteral("data/libobs")));
+    if (!QFileInfo::exists(libobsDataPath)) {
+        m_status = QStringLiteral("Dados essenciais do libobs não encontrados: %1").arg(libobsDataPath);
+        obs_shutdown();
+        return false;
+    }
+
+    // obs_add_data_path() stores the path verbatim and libobs later concatenates
+    // it directly with filenames such as "default.effect". Keep a trailing
+    // separator or libobs would look for ".../libobsdefault.effect".
+    if (!libobsDataPath.endsWith(QLatin1Char('/')) && !libobsDataPath.endsWith(QLatin1Char('\\')))
+        libobsDataPath += QLatin1Char('/');
+
+    const QByteArray libobsData = libobsDataPath.toUtf8();
+    obs_add_data_path(libobsData.constData());
+
+    char *defaultEffect = obs_find_data_file("default.effect");
+    if (!defaultEffect) {
+        m_status = QStringLiteral("Dados essenciais do libobs não puderam ser resolvidos: default.effect • caminho: %1")
+                       .arg(libobsDataPath);
+        obs_shutdown();
+        return false;
+    }
+    bfree(defaultEffect);
 #endif
 
     if (!resetAudioVideo()) {
