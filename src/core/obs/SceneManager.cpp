@@ -32,7 +32,11 @@ void applyDefaultLayout(obs_sceneitem_t *item, const QString &kind)
     if (!item)
         return;
 
-    if (kind == QStringLiteral("game") || kind == QStringLiteral("window") || kind == QStringLiteral("display")) {
+    if (kind == QStringLiteral("process") ||
+        kind == QStringLiteral("game") ||
+        kind == QStringLiteral("window") ||
+        kind == QStringLiteral("display") ||
+        kind == QStringLiteral("media")) {
         vec2 pos {0.0f, 0.0f};
         vec2 bounds {1920.0f, 1080.0f};
         obs_sceneitem_set_pos(item, &pos);
@@ -125,12 +129,16 @@ QString SceneManager::findAvailableInput(const QStringList &candidates) const
 QStringList SceneManager::candidatesForKind(const QString &kind) const
 {
 #ifdef Q_OS_WIN
+    if (kind == QStringLiteral("process"))
+        return {QStringLiteral("game_capture")};
     if (kind == QStringLiteral("game"))
         return {QStringLiteral("game_capture")};
     if (kind == QStringLiteral("window"))
         return {QStringLiteral("window_capture")};
     if (kind == QStringLiteral("display"))
         return {QStringLiteral("monitor_capture")};
+    if (kind == QStringLiteral("media"))
+        return {QStringLiteral("ffmpeg_source")};
     if (kind == QStringLiteral("webcam"))
         return {QStringLiteral("dshow_input")};
     if (kind == QStringLiteral("mic"))
@@ -138,12 +146,16 @@ QStringList SceneManager::candidatesForKind(const QString &kind) const
     if (kind == QStringLiteral("desktop_audio"))
         return {QStringLiteral("wasapi_output_capture")};
 #else
+    if (kind == QStringLiteral("process"))
+        return {QStringLiteral("game_capture")};
     if (kind == QStringLiteral("game"))
         return {QStringLiteral("game_capture")};
     if (kind == QStringLiteral("window"))
         return {QStringLiteral("pipewire-window-capture-source"), QStringLiteral("xcomposite_input")};
     if (kind == QStringLiteral("display"))
         return {QStringLiteral("pipewire-screen-capture-source"), QStringLiteral("pipewire-desktop-capture-source"), QStringLiteral("xshm_input_v2"), QStringLiteral("xshm_input")};
+    if (kind == QStringLiteral("media"))
+        return {QStringLiteral("ffmpeg_source")};
     if (kind == QStringLiteral("webcam"))
         return {QStringLiteral("v4l2_input")};
     if (kind == QStringLiteral("mic"))
@@ -156,10 +168,12 @@ QStringList SceneManager::candidatesForKind(const QString &kind) const
 
 QString SceneManager::labelForKind(const QString &kind) const
 {
-    if (kind == QStringLiteral("game")) return QStringLiteral("Captura de jogo");
+    if (kind == QStringLiteral("process")) return QStringLiteral("Processo / jogo em execução");
+    if (kind == QStringLiteral("game")) return QStringLiteral("Captura de jogo (automática)");
     if (kind == QStringLiteral("window")) return QStringLiteral("Captura de janela");
     if (kind == QStringLiteral("display")) return QStringLiteral("Captura de monitor/tela");
-    if (kind == QStringLiteral("webcam")) return QStringLiteral("Webcam");
+    if (kind == QStringLiteral("media")) return QStringLiteral("Mídia / vídeo / URL de live");
+    if (kind == QStringLiteral("webcam")) return QStringLiteral("Webcam / dispositivo de vídeo");
     if (kind == QStringLiteral("mic")) return QStringLiteral("Microfone");
     if (kind == QStringLiteral("desktop_audio")) return QStringLiteral("Áudio do computador");
     return kind;
@@ -169,9 +183,11 @@ QVariantList SceneManager::sourceOptions() const
 {
     QVariantList result;
     const QStringList kinds {
+        QStringLiteral("process"),
         QStringLiteral("game"),
         QStringLiteral("window"),
         QStringLiteral("display"),
+        QStringLiteral("media"),
         QStringLiteral("webcam"),
         QStringLiteral("mic"),
         QStringLiteral("desktop_audio")
@@ -240,9 +256,27 @@ bool SceneManager::addSource(const QString &kind, QString *createdName, QString 
     while (m_sourceNames.contains(name))
         name = QStringLiteral("%1 %2").arg(labelForKind(kind)).arg(suffix++);
 
+    obs_data_t *initialSettings = nullptr;
+    if (kind == QStringLiteral("process")) {
+        initialSettings = obs_data_create();
+        // game_capture normally starts in "any fullscreen" mode.  For the
+        // explicit process workflow we enter the same specific-window mode
+        // used by OBS so its Window property immediately exposes running
+        // games/applications.  EXE priority keeps matching stable when the
+        // game changes its window title.
+        obs_data_set_string(initialSettings, "capture_mode", "window");
+        obs_data_set_int(initialSettings, "priority", 2);
+    } else if (kind == QStringLiteral("media")) {
+        initialSettings = obs_data_create();
+        obs_data_set_bool(initialSettings, "is_local_file", true);
+    }
+
     const QByteArray idUtf8 = inputId.toUtf8();
     const QByteArray nameUtf8 = name.toUtf8();
-    obs_source_t *source = obs_source_create(idUtf8.constData(), nameUtf8.constData(), nullptr, nullptr);
+    obs_source_t *source = obs_source_create(idUtf8.constData(), nameUtf8.constData(), initialSettings, nullptr);
+    if (initialSettings)
+        obs_data_release(initialSettings);
+
     if (!source) {
         if (error)
             *error = QStringLiteral("Falha ao criar %1 usando %2").arg(name, inputId);
@@ -541,8 +575,10 @@ bool SceneManager::setSourceProperty(const QString &sourceName,
         obs_data_set_int(settings, propertyUtf8.constData(), value.toLongLong());
     else if (format == QStringLiteral("float"))
         obs_data_set_double(settings, propertyUtf8.constData(), value.toDouble());
-    else
-        obs_data_set_string(settings, propertyUtf8.constData(), value.toString().toUtf8().constData());
+    else {
+        const QByteArray valueUtf8 = value.toString().toUtf8();
+        obs_data_set_string(settings, propertyUtf8.constData(), valueUtf8.constData());
+    }
 
     obs_properties_t *properties = obs_source_properties(source);
     if (properties) {
