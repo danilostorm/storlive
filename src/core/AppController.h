@@ -34,7 +34,7 @@ public:
 
     QVariantList destinations() const;
     QVariantList encodeGroups() const;
-    QVariantList sourceOptions() const { return m_obs.isInitialized() ? m_scenes.sourceOptions() : QVariantList {}; }
+    QVariantList sourceOptions() const;
     QStringList sources() const { return m_scenes.sourceNames(); }
     QVariantList sourceItems() const { return m_obs.isInitialized() ? m_scenes.sourceItems() : QVariantList {}; }
     QStringList encoderOptions() const;

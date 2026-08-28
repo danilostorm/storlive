@@ -22,6 +22,8 @@ AppController::AppController(QObject *parent)
             m_activityStatus = m_multiOutput.outputBackendReady()
                 ? QStringLiteral("Engine pronta • configure fontes e destinos")
                 : QStringLiteral("libobs ativo, mas faltam plugins RTMP/encoders");
+    } else {
+        m_activityStatus = m_obs.status();
     }
 
     m_statsTimer.setInterval(1000);
@@ -59,6 +61,37 @@ QVariantList AppController::destinations() const
 QVariantList AppController::encodeGroups() const
 {
     return m_multiOutput.describeGroups(m_destinations);
+}
+
+QVariantList AppController::sourceOptions() const
+{
+    if (m_obs.isInitialized())
+        return m_scenes.sourceOptions();
+
+    const QString unavailable = QStringLiteral("engine indisponível • %1").arg(m_obs.status());
+    QVariantList result;
+    const auto add = [&result, &unavailable](const QString &kind, const QString &label) {
+        result.append(QVariantMap {
+            {QStringLiteral("kind"), kind},
+            {QStringLiteral("label"), label},
+            {QStringLiteral("available"), false},
+            {QStringLiteral("backend"), unavailable}
+        });
+    };
+
+#ifdef Q_OS_WIN
+    add(QStringLiteral("process_game"), QStringLiteral("Processo / jogo em execução"));
+    add(QStringLiteral("game"), QStringLiteral("Captura de jogo (automática)"));
+#else
+    add(QStringLiteral("game"), QStringLiteral("Captura de jogo"));
+#endif
+    add(QStringLiteral("window"), QStringLiteral("Captura de janela"));
+    add(QStringLiteral("display"), QStringLiteral("Captura de monitor/tela"));
+    add(QStringLiteral("media"), QStringLiteral("Mídia / vídeo / URL de live"));
+    add(QStringLiteral("webcam"), QStringLiteral("Webcam / dispositivo de vídeo"));
+    add(QStringLiteral("mic"), QStringLiteral("Microfone"));
+    add(QStringLiteral("desktop_audio"), QStringLiteral("Áudio do computador"));
+    return result;
 }
 
 QStringList AppController::encoderOptions() const
@@ -170,6 +203,17 @@ QVariantMap AppController::setStreamProfile(int width,
 
 QVariantMap AppController::addSource(const QString &kind)
 {
+    if (!m_obs.isInitialized()) {
+        const QString error = QStringLiteral("Não é possível adicionar fonte: %1").arg(m_obs.status());
+        m_activityStatus = error;
+        emit statusChanged();
+        return {
+            {QStringLiteral("ok"), false},
+            {QStringLiteral("name"), QString()},
+            {QStringLiteral("error"), error}
+        };
+    }
+
     QString error;
     QString createdName;
     const bool ok = m_scenes.addSource(kind, &createdName, &error);
