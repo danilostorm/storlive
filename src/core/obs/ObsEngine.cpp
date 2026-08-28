@@ -172,7 +172,7 @@ bool ObsEngine::resetAudioVideo()
         probe.setLoadHints(QLibrary::ResolveAllSymbolsHint);
         const bool probeLoaded = probe.load();
         const QString probeText = probeLoaded
-            ? QStringLiteral("DLL/SO carregável")
+            ? QStringLiteral("módulo gráfico resolvido: %1").arg(candidate)
             : QStringLiteral("loader: %1").arg(probe.errorString());
         if (probeLoaded)
             probe.unload();
