@@ -65,8 +65,20 @@ QVariantList AppController::encodeGroups() const
 
 QVariantList AppController::sourceOptions() const
 {
-    if (m_obs.isInitialized())
-        return m_scenes.sourceOptions();
+    if (m_obs.isInitialized()) {
+        QVariantList options = m_scenes.sourceOptions();
+#ifdef Q_OS_WIN
+        for (QVariant &entry : options) {
+            QVariantMap option = entry.toMap();
+            if (option.value(QStringLiteral("kind")).toString() == QStringLiteral("process")) {
+                option.insert(QStringLiteral("label"), QStringLiteral("Jogo / aplicativo em janela (recomendado)"));
+                option.insert(QStringLiteral("backend"), QStringLiteral("window_capture • compatível"));
+                entry = option;
+            }
+        }
+#endif
+        return options;
+    }
 
     const QString unavailable = QStringLiteral("engine indisponível • %1").arg(m_obs.status());
     QVariantList result;
@@ -214,9 +226,18 @@ QVariantMap AppController::addSource(const QString &kind)
         };
     }
 
+    QString effectiveKind = kind;
+#ifdef Q_OS_WIN
+    // Explicitly selected games/applications are more reliable through the
+    // OBS Window Capture backend.  Game Capture remains available separately
+    // for exclusive fullscreen/high-performance hook capture.
+    if (kind == QStringLiteral("process"))
+        effectiveKind = QStringLiteral("window");
+#endif
+
     QString error;
     QString createdName;
-    const bool ok = m_scenes.addSource(kind, &createdName, &error);
+    const bool ok = m_scenes.addSource(effectiveKind, &createdName, &error);
     if (ok) {
         m_activityStatus = QStringLiteral("%1 adicionada • escolha a janela/dispositivo nas propriedades").arg(createdName);
         emit sourcesChanged();
