@@ -143,6 +143,7 @@ jobs:
             'dist/obs-plugins/64bit/win-wasapi.dll',
             'dist/data/libobs',
             'dist/qml/QtQuick/Controls/qtquickcontrols2plugin.dll',
+            'dist/qml/QtQuick/Controls/Material/qtquickcontrols2materialstyleplugin.dll',
             'dist/qml/QtQuick/Templates/qtquicktemplates2plugin.dll',
             'dist/qml/QtQuick/Window/quickwindowplugin.dll',
             'dist/qml/QtQuick/Layouts/qquicklayoutsplugin.dll',
@@ -162,15 +163,31 @@ jobs:
           Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter storlive-startup.log -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
           $exe = (Resolve-Path (Join-Path $smokeDir 'storlive.exe')).Path
           $process = Start-Process -FilePath $exe -WorkingDirectory $env:TEMP -PassThru
-          Start-Sleep -Seconds 8
-          $process.Refresh()
-          if ($process.HasExited) {
-            Write-Host "StorLive exited with code $($process.ExitCode)"
-            Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue |
-              Where-Object { $_.Message -match 'storlive\.exe' } |
-              Select-Object -First 5 -ExpandProperty Message | Write-Host
-            throw "StorLive exited during extracted portable startup smoke test (exit=$($process.ExitCode))"
-          }
+
+          $combined = ''
+          $deadline = (Get-Date).AddSeconds(30)
+          do {
+            Start-Sleep -Seconds 1
+            $process.Refresh()
+            if ($process.HasExited) {
+              Write-Host "StorLive exited with code $($process.ExitCode)"
+              Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-5)} -ErrorAction SilentlyContinue |
+                Where-Object { $_.Message -match 'storlive\.exe' } |
+                Select-Object -First 5 -ExpandProperty Message | Write-Host
+              throw "StorLive exited during extracted portable startup smoke test (exit=$($process.ExitCode))"
+            }
+
+            $logs = @(Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter storlive-startup.log -ErrorAction SilentlyContinue)
+            $combined = ''
+            foreach ($log in $logs) {
+              $content = Get-Content $log.FullName -Raw
+              $combined += "`n$content"
+            }
+
+            $engineReady = $combined -match 'Engine: libobs .* inicializado'
+            $sourcesReady = $combined -match 'Engine: libobs .* • ([1-9][0-9]*) tipos de fonte'
+            if ($engineReady -and $sourcesReady) { break }
+          } while ((Get-Date) -lt $deadline)
 
           $logs = @(Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter storlive-startup.log -ErrorAction SilentlyContinue)
           if ($logs.Count -eq 0) {
@@ -192,7 +209,7 @@ jobs:
           }
           if ($combined -notmatch 'Engine: libobs .* inicializado') {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            throw 'Windows portable libobs D3D11 video engine did not initialize'
+            throw 'Windows portable libobs D3D11 video engine did not initialize within 30 seconds'
           }
           if ($combined -notmatch 'Engine: libobs .* • ([1-9][0-9]*) tipos de fonte') {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
