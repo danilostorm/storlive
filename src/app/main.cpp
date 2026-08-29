@@ -5,6 +5,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
+#include <QQuickStyle>
 #include <QStandardPaths>
 #include <QTextStream>
 #include <QUrl>
@@ -34,7 +35,20 @@ void appendStartupLog(const QString &message)
 
 int main(int argc, char *argv[])
 {
+    // Force one cross-platform desktop style instead of inheriting the old
+    // native-looking Windows controls.  The dense Material variant is better
+    // suited to a mouse/keyboard broadcast dashboard and keeps Windows/Linux
+    // visually consistent.
+    qputenv("QT_QUICK_CONTROLS_MATERIAL_THEME", "Dark");
+    qputenv("QT_QUICK_CONTROLS_MATERIAL_VARIANT", "Dense");
+    qputenv("QT_QUICK_CONTROLS_MATERIAL_ACCENT", "#5B8CFF");
+    qputenv("QT_QUICK_CONTROLS_MATERIAL_PRIMARY", "#171B24");
+    qputenv("QT_QUICK_CONTROLS_MATERIAL_BACKGROUND", "#111318");
+    qputenv("QT_QUICK_CONTROLS_HOVER_ENABLED", "1");
+
     QGuiApplication app(argc, argv);
+    QQuickStyle::setStyle(QStringLiteral("Material"));
+
     QCoreApplication::setOrganizationName(QStringLiteral("StorLive"));
     QCoreApplication::setApplicationName(QStringLiteral("StorLive"));
 
