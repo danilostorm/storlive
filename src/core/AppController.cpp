@@ -72,7 +72,7 @@ QVariantList AppController::sourceOptions() const
             QVariantMap option = entry.toMap();
             if (option.value(QStringLiteral("kind")).toString() == QStringLiteral("process")) {
                 option.insert(QStringLiteral("label"), QStringLiteral("Jogo / aplicativo em janela (recomendado)"));
-                option.insert(QStringLiteral("backend"), QStringLiteral("window_capture • compatível"));
+                option.insert(QStringLiteral("backend"), QStringLiteral("window_capture • WGC compatível"));
                 entry = option;
             }
         }
@@ -92,7 +92,7 @@ QVariantList AppController::sourceOptions() const
     };
 
 #ifdef Q_OS_WIN
-    add(QStringLiteral("process_game"), QStringLiteral("Processo / jogo em execução"));
+    add(QStringLiteral("process"), QStringLiteral("Jogo / aplicativo em janela (recomendado)"));
     add(QStringLiteral("game"), QStringLiteral("Captura de jogo (automática)"));
 #else
     add(QStringLiteral("game"), QStringLiteral("Captura de jogo"));
@@ -229,7 +229,7 @@ QVariantMap AppController::addSource(const QString &kind)
     QString effectiveKind = kind;
 #ifdef Q_OS_WIN
     // Explicitly selected games/applications are more reliable through the
-    // OBS Window Capture backend.  Game Capture remains available separately
+    // OBS Window Capture backend. Game Capture remains separately available
     // for exclusive fullscreen/high-performance hook capture.
     if (kind == QStringLiteral("process"))
         effectiveKind = QStringLiteral("window");
@@ -238,8 +238,33 @@ QVariantMap AppController::addSource(const QString &kind)
     QString error;
     QString createdName;
     const bool ok = m_scenes.addSource(effectiveKind, &createdName, &error);
+
+#ifdef Q_OS_WIN
+    if (ok && kind == QStringLiteral("process")) {
+        // Prefer Windows Graphics Capture for the friendly game/window path.
+        // OBS itself falls back to BitBlt when WGC is unavailable.  Matching
+        // by executable keeps the source attached even if a game changes its
+        // window title between menus and gameplay.
+        QString propertyError;
+        if (!m_scenes.setSourceProperty(createdName,
+                                        QStringLiteral("method"),
+                                        2,
+                                        QStringLiteral("int"),
+                                        &propertyError)) {
+            error = propertyError;
+        }
+        m_scenes.setSourceProperty(createdName,
+                                   QStringLiteral("priority"),
+                                   2,
+                                   QStringLiteral("int"),
+                                   nullptr);
+    }
+#endif
+
     if (ok) {
-        m_activityStatus = QStringLiteral("%1 adicionada • escolha a janela/dispositivo nas propriedades").arg(createdName);
+        m_activityStatus = error.isEmpty()
+            ? QStringLiteral("%1 adicionada • escolha a janela/dispositivo nas propriedades").arg(createdName)
+            : QStringLiteral("%1 adicionada • %2").arg(createdName, error);
         emit sourcesChanged();
     } else {
         m_activityStatus = error;
